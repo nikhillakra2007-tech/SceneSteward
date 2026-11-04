@@ -5,10 +5,11 @@ the startup check reports only whether each value is present/valid.
 """
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import field_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]
@@ -34,6 +35,10 @@ class Settings(BaseSettings):
 
     database_url: str
     database_url_test: str | None = None
+    # Schema owner used only for migrations; never used at runtime.
+    migration_database_url: str | None = None
+    # Database identity secret for cryptographic HMAC trust-boundary RLS enforcement
+    database_identity_secret: str = "scenesteward_db_trust_secret_2026_prod_v1"
 
     auth_provider: str = "dev"
     auth_dev_secret: str | None = None
@@ -51,8 +56,16 @@ class Settings(BaseSettings):
     signed_url_ttl_seconds: int = 600
     download_url_ttl_seconds: int = 300
     max_upload_bytes: int = 25 * 1024 * 1024
+    max_uncompressed_bytes: int = 50 * 1024 * 1024
+
+    antivirus_provider: str = "mock"
+    clamav_host: str = Field(default="127.0.0.1", validation_alias=AliasChoices("clamav_host", "antivirus_clamav_host"))
+    clamav_port: int = Field(default=3310, validation_alias=AliasChoices("clamav_port", "antivirus_clamav_port"))
+    antivirus_fail_closed: bool = False
 
     app_encryption_key: str | None = None
+    app_encryption_current_kid: str = "primary"
+    app_encryption_keys: str = "{}"
 
     ai_provider: str = "offline"
     anthropic_api_key: str | None = None
@@ -70,6 +83,14 @@ class Settings(BaseSettings):
     frontend_origin: str = "http://localhost:3000"
     rate_limit_per_minute: int = 120
     max_request_bytes: int = 1048576
+
+    @model_validator(mode="after")
+    def _production_guard(self) -> Settings:
+        if (self.is_production or self.is_staging) and self.auth_provider == "dev":
+            raise ValueError(f"AUTH_PROVIDER=dev is not permitted in APP_ENV={self.app_env}; configure Supabase or another real IdP")
+        if (self.is_production or self.is_staging) and not self.app_encryption_key:
+            raise ValueError(f"APP_ENCRYPTION_KEY must be set in APP_ENV={self.app_env}")
+        return self
 
     @field_validator("app_env")
     @classmethod
@@ -116,6 +137,10 @@ class Settings(BaseSettings):
         return self.app_env == "production"
 
     @property
+    def is_staging(self) -> bool:
+        return self.app_env == "staging"
+
+    @property
     def resolved_jwks_url(self) -> str | None:
         if self.auth_jwks_url:
             return self.auth_jwks_url
@@ -133,6 +158,24 @@ class Settings(BaseSettings):
     def frontend_origins(self) -> list[str]:
         return [o.strip() for o in self.frontend_origin.split(",") if o.strip()]
 
+    @property
+    def resolved_encryption_key_ring(self) -> dict[str, str]:
+        ring: dict[str, str] = {}
+        if self.app_encryption_keys and self.app_encryption_keys.strip() not in ("{}", ""):
+            import json
+            try:
+                parsed = json.loads(self.app_encryption_keys)
+                if isinstance(parsed, dict):
+                    ring.update({str(k): str(v) for k, v in parsed.items()})
+            except (json.JSONDecodeError, TypeError, ValueError):
+                for pair in self.app_encryption_keys.split(","):
+                    if ":" in pair:
+                        k, v = pair.split(":", 1)
+                        ring[k.strip()] = v.strip()
+        if self.app_encryption_key:
+            ring.setdefault(self.app_encryption_current_kid or "primary", self.app_encryption_key)
+        return ring
+
     def switch_configured(self) -> bool:
         return self.switch_adapter == "http" and bool(self.switch_base_url) and bool(self.switch_api_key) and bool(self.switch_agent_id)
 
@@ -145,8 +188,8 @@ def startup_checks(s: Settings) -> list[dict[str, str]]:
         checks.append({"check": name, "status": detail_ok if ok else detail_missing})
 
     add("DATABASE_URL", bool(s.database_url))
-    if s.is_production:
-        add("AUTH_PROVIDER!=dev", s.auth_provider != "dev", "dev provider not allowed in production")
+    if s.is_production or s.is_staging:
+        add("AUTH_PROVIDER!=dev", s.auth_provider != "dev", f"dev provider not allowed in {s.app_env}")
     if s.auth_provider == "dev":
         add("AUTH_DEV_SECRET", bool(s.auth_dev_secret))
     else:
@@ -165,4 +208,7 @@ def startup_checks(s: Settings) -> list[dict[str, str]]:
 
 @lru_cache
 def get_settings() -> Settings:
+    env_file = os.environ.get("SCENESTEWARD_ENV_FILE") or os.environ.get("ENV_FILE")
+    if env_file:
+        return Settings(_env_file=env_file)
     return Settings()

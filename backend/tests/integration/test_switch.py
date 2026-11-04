@@ -96,3 +96,48 @@ def test_consent_cannot_be_modified_by_switch_events(db):
     src = Path(listener.__file__).read_text(encoding="utf-8")
     for forbidden in ("consent_records", "consent_choices", "ConsentRecord", "ConsentChoice"):
         assert forbidden not in src
+
+
+def test_switch_retry_claim_batch_atomic(db):
+    from scripts.switch_retry import claim_batch
+
+    owner = make_user(db, "retry_owner@example.com")
+    project = make_project(db, owner, title="Retry Project")
+
+    evt1 = IntegrationEvent(
+        integration_name="switch",
+        event_type="proposed_use.analyzed",
+        external_event_id="ext-retry-1",
+        processing_status="failed",
+        attempt_count=0,
+        project_id=project.id,
+        payload_summary={"project_id": str(project.id)},
+        payload_reference="proposed_use:00000000-0000-0000-0000-000000000001",
+    )
+    evt2 = IntegrationEvent(
+        integration_name="switch",
+        event_type="proposed_use.analyzed",
+        external_event_id="ext-retry-2",
+        processing_status="failed",
+        attempt_count=1,
+        project_id=project.id,
+        payload_summary={"project_id": str(project.id)},
+        payload_reference="proposed_use:00000000-0000-0000-0000-000000000002",
+    )
+    db.add_all([evt1, evt2])
+    db.commit()
+
+    claimed_1 = claim_batch(db, limit=1)
+    assert len(claimed_1) == 1
+    assert claimed_1[0].processing_status == "processing"
+    assert claimed_1[0].attempt_count == 1
+
+    claimed_2 = claim_batch(db, limit=1)
+    assert len(claimed_2) == 1
+    assert claimed_2[0].id != claimed_1[0].id
+    assert claimed_2[0].processing_status == "processing"
+    assert claimed_2[0].attempt_count == 2
+
+    claimed_none = claim_batch(db, limit=10)
+    assert len(claimed_none) == 0
+

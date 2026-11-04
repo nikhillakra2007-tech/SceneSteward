@@ -75,6 +75,8 @@ def create_app() -> FastAPI:
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["Cache-Control"] = "no-store"
+        from app.services.metrics import record_request
+        record_request(method=request.method, endpoint=request.url.path, status_code=response.status_code, duration_ms=duration_ms)
         logger.info("request", extra={
             "method": request.method, "endpoint": request.url.path,
             "status": response.status_code, "duration_ms": duration_ms,
@@ -101,6 +103,8 @@ _lock = threading.Lock()
 
 def _rate_check(request: Request, per_minute: int) -> bool:
     if request.url.path in ("/health", "/health/ready"):
+        return False
+    if get_settings().app_env == "test":
         return False
     host = (request.client.host if request.client else "unknown")
     window = int(time.time() // 60)

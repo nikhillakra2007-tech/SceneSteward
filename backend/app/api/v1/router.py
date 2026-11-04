@@ -4,9 +4,11 @@ from fastapi import APIRouter
 from app.api.v1.endpoints import (
     agents,
     auth,
+    communications,
     consent,
     documents,
     integrations,
+    metrics,
     participants,
     projects,
     proposed_uses,
@@ -33,3 +35,5 @@ api_router.include_router(timeline.router)
 api_router.include_router(tasks.router)
 api_router.include_router(integrations.router)
 api_router.include_router(switch_rooms.router)
+api_router.include_router(metrics.router)
+api_router.include_router(communications.router)

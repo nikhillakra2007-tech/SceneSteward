@@ -13,7 +13,7 @@ from fastapi import Depends, Header, Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.database import get_db
+from app.core.database import get_db, set_identity
 from app.core.exceptions import NotFoundError, PermissionDenied, Unauthenticated
 from app.core.security import decode_token
 from app.models import Participant, Project, ProjectMembership, User
@@ -51,6 +51,7 @@ def get_current_user(
             raise Unauthenticated("Unknown user; provision the account first", code="user_not_provisioned")
     if user.account_status != "active":
         raise PermissionDenied("Account is not active", code="account_inactive")
+    set_identity(user.id, db)
     return user
 
 

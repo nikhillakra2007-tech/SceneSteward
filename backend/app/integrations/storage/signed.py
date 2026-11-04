@@ -19,12 +19,16 @@ from app.core.exceptions import PreconditionFailed
 _PURPOSES = ("upload", "download")
 
 
-def _signing_material() -> bytes:
+def _signing_material(kid: str | None = None) -> tuple[str, bytes]:
     s = get_settings()
+    ring = s.resolved_encryption_key_ring
+    active_kid = kid or s.app_encryption_current_kid or "primary"
+    if ring and active_kid in ring:
+        return active_kid, hashlib.sha256(ring[active_kid].encode("utf-8")).digest()
     material = s.app_encryption_key or s.auth_dev_secret
     if not material:
         raise PreconditionFailed("Storage signing is not configured (APP_ENCRYPTION_KEY missing)")
-    return hashlib.sha256(material.encode("utf-8")).digest()
+    return "primary", hashlib.sha256(material.encode("utf-8")).digest()
 
 
 def _b64u(raw: bytes) -> str:
@@ -36,14 +40,16 @@ def _unb64u(data: str) -> bytes:
     return base64.urlsafe_b64decode(data + pad)
 
 
-def issue_token(*, storage_key: str, purpose: str, ttl_seconds: int, extra: dict[str, Any] | None = None) -> str:
+def issue_token(*, storage_key: str, purpose: str, ttl_seconds: int, extra: dict[str, Any] | None = None,
+                kid: str | None = None) -> str:
     if purpose not in _PURPOSES:
         raise ValueError(f"purpose must be one of {_PURPOSES}")
-    payload = {"key": storage_key, "purpose": purpose, "exp": int(time.time()) + ttl_seconds}
+    active_kid, material = _signing_material(kid)
+    payload = {"key": storage_key, "purpose": purpose, "exp": int(time.time()) + ttl_seconds, "kid": active_kid}
     if extra:
         payload.update(extra)
     body = _b64u(json.dumps(payload, separators=(",", ":")).encode())
-    sig = hmac.new(_signing_material(), body.encode(), hashlib.sha256).hexdigest()
+    sig = hmac.new(material, body.encode(), hashlib.sha256).hexdigest()
     return f"{body}.{sig}"
 
 
@@ -52,13 +58,15 @@ def verify_token(token: str, *, purpose: str) -> dict[str, Any]:
         body, sig = token.split(".", 1)
     except ValueError as exc:
         raise PreconditionFailed("Malformed storage token") from exc
-    expected = hmac.new(_signing_material(), body.encode(), hashlib.sha256).hexdigest()
-    if not hmac.compare_digest(expected, sig):
-        raise PreconditionFailed("Invalid storage token signature")
     try:
         payload = json.loads(_unb64u(body))
     except Exception as exc:
         raise PreconditionFailed("Malformed storage token payload") from exc
+    kid = payload.get("kid")
+    _, material = _signing_material(kid)
+    expected = hmac.new(material, body.encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected, sig):
+        raise PreconditionFailed("Invalid storage token signature")
     if payload.get("purpose") != purpose:
         raise PreconditionFailed("Storage token purpose mismatch")
     if int(payload.get("exp", 0)) < int(time.time()):

@@ -77,57 +77,59 @@ class BaseAgent:
     # -- execution -----------------------------------------------------------
     def execute(self, db: Session, *, context: dict[str, Any],
                 actor: tuple[str, str], correlation_id: uuid.UUID) -> AgentRun:
-        settings = get_settings()
-        run = AgentRun(
-            project_id=uuid.UUID(context["project_id"]),
-            participant_id=uuid.UUID(context["participant_id"]) if context.get("participant_id") else None,
-            proposed_use_id=uuid.UUID(context["proposed_use_id"]) if context.get("proposed_use_id") else None,
-            agent_name=self.name,
-            model_provider=settings.ai_provider,
-            model_version=getattr(self, "model_version", None) or (settings.ai_model if settings.ai_provider == "anthropic" else "deterministic-offline-1"),
-            prompt_version=self.prompt_version,
-            input_reference=context.get("input_reference"),
-            execution_status="running",
-            started_at=datetime.now(UTC),
-        )
-        db.add(run)
-        db.flush()
-        started = time.monotonic()
+        from app.core.database import system_context
+        with system_context(db):  # trusted worker scope — insert/update agent runs + audit
+            settings = get_settings()
+            run = AgentRun(
+                project_id=uuid.UUID(context["project_id"]),
+                participant_id=uuid.UUID(context["participant_id"]) if context.get("participant_id") else None,
+                proposed_use_id=uuid.UUID(context["proposed_use_id"]) if context.get("proposed_use_id") else None,
+                agent_name=self.name,
+                model_provider=settings.ai_provider,
+                model_version=getattr(self, "model_version", None) or (settings.ai_model if settings.ai_provider == "anthropic" else "deterministic-offline-1"),
+                prompt_version=self.prompt_version,
+                input_reference=context.get("input_reference"),
+                execution_status="running",
+                started_at=datetime.now(UTC),
+            )
+            db.add(run)
+            db.flush()
+            started = time.monotonic()
 
-        try:
-            payload = self._produce_output(db, context, run.id)
-            validated = self._validate(payload, context, run.id)
-            run.output_data = validated.model_dump(mode="json")
-            run.execution_status = "succeeded"
-        except _RejectedOutput as exc:
-            run.execution_status = "rejected"
-            run.error_code = "invalid_output"
-            logger.warning("agent %s produced invalid output: %s", self.name, exc)
-        except UpstreamUnavailable as exc:
-            run.execution_status = "timeout" if exc.code == "ai_timeout" else "failed"
-            run.error_code = exc.code or "ai_error"
-            logger.warning("agent %s upstream failure: %s", self.name, exc.code)
-        except Exception:
-            run.execution_status = "failed"
-            run.error_code = "agent_exception"
-            logger.exception("agent %s failed", self.name)
+            try:
+                payload = self._produce_output(db, context, run.id)
+                validated = self._validate(payload, context, run.id)
+                run.output_data = validated.model_dump(mode="json")
+                run.execution_status = "succeeded"
+            except _RejectedOutput as exc:
+                run.execution_status = "rejected"
+                run.error_code = "invalid_output"
+                logger.warning("agent %s produced invalid output: %s", self.name, exc)
+            except UpstreamUnavailable as exc:
+                run.execution_status = "timeout" if exc.code == "ai_timeout" else "failed"
+                run.error_code = exc.code or "ai_error"
+                logger.warning("agent %s upstream failure: %s", self.name, exc.code)
+            except Exception:
+                run.execution_status = "failed"
+                run.error_code = "agent_exception"
+                logger.exception("agent %s failed", self.name)
 
-        run.completed_at = datetime.now(UTC)
-        audit.record(
-            db,
-            project_id=run.project_id,
-            participant_id=run.participant_id,
-            actor_type="agent",
-            actor_id=self.name,
-            action=f"agent_run.{run.execution_status}",
-            entity_type="agent_run",
-            entity_id=run.id,
-            new_value={"agent": self.name, "error_code": run.error_code,
-                       "duration_ms": int((time.monotonic() - started) * 1000)},
-            correlation_id=correlation_id,
-        )
-        db.flush()
-        return run
+            run.completed_at = datetime.now(UTC)
+            audit.record(
+                db,
+                project_id=run.project_id,
+                participant_id=run.participant_id,
+                actor_type="agent",
+                actor_id=self.name,
+                action=f"agent_run.{run.execution_status}",
+                entity_type="agent_run",
+                entity_id=run.id,
+                new_value={"agent": self.name, "error_code": run.error_code,
+                           "duration_ms": int((time.monotonic() - started) * 1000)},
+                correlation_id=correlation_id,
+            )
+            db.flush()
+            return run
 
     # -- internals -----------------------------------------------------------
     def _produce_output(self, db: Session, context: dict[str, Any], run_id: uuid.UUID) -> dict[str, Any]:
