@@ -1,14 +1,20 @@
 # SceneSteward — Testing
 
-**61 tests, all passing** (verified 2026-11-04, PostgreSQL 18, Python 3.12):
+**66 tests, all passing** (verified 2026-11-04, PostgreSQL 18, Python 3.12):
 
 ```
 tests/unit         10  comparison engine (mapping, outcomes, injection)
 tests/agents       11  5 agents × output validation, injection, unsupported claims
-tests/integration  28  auth(9) · documents(8) · migrations(4) · switch(7)
+tests/integration  33  auth(9) · documents(8) · extraction(5) · migrations(4) · switch(7)
 tests/security     10  RBAC, cross-project isolation, last-owner, viewer timeline
 tests/e2e           2  "Beyond the Silence" full flow + viewer denial
 ```
+
+Document pipeline is covered end to end with real files: generated PDFs
+(reportlab) and plain text are uploaded through signed URLs, extracted with
+page references, and produce **UNCONFIRMED** proposed consent records; editors
+cannot trigger extraction or proposals; corrupt PDFs degrade to
+`extraction_status='failed'` with an auditable error.
 
 ## What the suite proves (and what it doesn't)
 
@@ -26,6 +32,9 @@ tests/e2e           2  "Beyond the Silence" full flow + viewer denial
   decided reviews are immutable; viewer forbidden end-to-end.
 - Documents: signed-URL round trip (PUT→complete→download), magic-byte sniffing,
   extension/size caps, traversal rejection, editor denied.
+- Extraction: PDF (reportlab-generated) and TXT upload → page-referenced text;
+  corrupt PDF → `failed` + audit row; proposed consent records are always
+  `awaiting_confirmation`/unconfirmed; comparison engine ignores them until a human confirms.
 - Switch: mock adapter (verified flag honesty), room reuse, send-to-unknown-room fails
   closed, inbound dedupe (`skipped_duplicate`), unmapped room recorded, no code path
   from inbound events to consent tables.

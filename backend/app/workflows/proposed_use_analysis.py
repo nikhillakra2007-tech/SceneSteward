@@ -133,6 +133,9 @@ def run_proposed_use_analysis(
                    "missing_categories": missing, "declined_categories": declined},
         correlation_id=correlation_id,
     )
+    from app.events import publish
+    publish("proposed_use.analysed", correlation_id=correlation_id,
+            project_id=str(project_id), proposed_use_id=str(proposed_use.id), outcome=result.outcome)
 
     # 8. Agents (independent; failures are recorded, never rolled back)
     agent_outputs = run_agents(
@@ -271,12 +274,18 @@ def maybe_notify_switch(db, *, project_id, participant_id, proposed_use, result,
     except IntegrityError:
         logger.info("switch review-context notification already recorded for correlation %s", correlation_id)
     if not send.ok:
-        tasks.create_task(
+        from app.integrations.notifications import notify_integration_failure
+        notify_integration_failure(
             db, project_id=project_id, participant_id=participant_id,
-            task_type="integration_failure",
             title="Switch notification failed",
-            description=f"error_code={send.error_code}; correlation_id={correlation_id}",
-            priority="high", source_type="integration_event", source_id=None,
-            created_by_actor_type="integration",
+            detail=f"error_code={send.error_code}; correlation_id={correlation_id}",
+            correlation_id=correlation_id,
         )
+        from app.events import publish
+        publish("switch.delivery_failed", correlation_id=correlation_id,
+                proposed_use_id=str(proposed_use.id), error_code=send.error_code)
+    else:
+        from app.events import publish
+        publish("switch.delivery_succeeded", correlation_id=correlation_id,
+                proposed_use_id=str(proposed_use.id))
     return {"status": "sent" if send.ok else "failed", "detail": send.error_code or ""}

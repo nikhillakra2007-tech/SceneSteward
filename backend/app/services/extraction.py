@@ -60,6 +60,9 @@ def extract_document(db: Session, *, document: ReleaseDocument, actor: tuple[str
         document.extraction_status = "failed"
         document.extraction_error = f"{type(exc).__name__}: {str(exc)[:400]}"
         logger.warning("extraction failed document=%s error=%s", document.id, type(exc).__name__)
+        from app.events import publish
+        publish("document.extraction_failed", correlation_id=correlation_id,
+                document_id=str(document.id), error_category=type(exc).__name__)
         audit.record(db, project_id=document.project_id, participant_id=document.participant_id,
                      actor_type=actor[0], actor_id=actor[1],
                      action="document.extraction_failed", entity_type="release_document",

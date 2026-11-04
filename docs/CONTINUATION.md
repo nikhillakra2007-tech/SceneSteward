@@ -1,7 +1,8 @@
 # SceneSteward — Continuation / Progress
 
-**State (Nov 2026): backend built, tested, documented, uncommitted-then-committed.**
-61 tests pass; ruff clean; migrations apply and roll back cleanly.
+**State (Nov 2026): backend built, tested, documented, committed. 66 tests pass; ruff clean.**
+Document-extraction pipeline verified end-to-end (real PDF/TXT through signed URLs;
+corrupt files degrade to `failed` with auditable errors; extracted consent is never auto-confirmed).
 
 ## Done
 - Repo + git init; `.gitignore` (env, venv, `backend/var/`).

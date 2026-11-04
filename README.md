@@ -12,7 +12,7 @@ not legal advice, not a compliance certification.**
 
 ## Status
 
-Backed and tested end to end: 61 automated tests pass (see docs/TESTING.md).
+Backed and tested end to end: 66 automated tests pass (see docs/TESTING.md).
 Live Switch connection is **unverified** (no server in this environment) — see
 docs/SWITCH_INTEGRATION.md. AI agents run offline/deterministic by default.
 
@@ -56,7 +56,7 @@ $env:ALEMBIC_DATABASE_URL='postgresql+psycopg://scenesteward:changeme@127.0.0.1:
 $env:DATABASE_URL_TEST='postgresql+psycopg://scenesteward:changeme@127.0.0.1:5432/scenesteward_test'
 $env:ALEMBIC_DATABASE_URL=$env:DATABASE_URL_TEST
 .\.venv\Scripts\python.exe -m alembic -c alembic.ini upgrade head
-.\.venv\Scripts\python.exe -m pytest tests -q        # 61 passed
+.\.venv\Scripts\python.exe -m pytest tests -q        # 66 passed
 .\.venv\Scripts\python.exe -m ruff check app scripts tests
 ```
 
@@ -75,14 +75,14 @@ docker compose up --build        # postgres + migrate + api on :8000
 - [docs/SECURITY.md](docs/SECURITY.md) — controls, RBAC matrix, known gaps
 - [docs/SWITCH_INTEGRATION.md](docs/SWITCH_INTEGRATION.md) — real protocol, setup, verification matrix
 - [docs/AGENTS.md](docs/AGENTS.md) — the five agents, contracts, data sent, injection posture
-- [docs/TESTING.md](docs/TESTING.md) — what the 61 tests prove / don't
+- [docs/TESTING.md](docs/TESTING.md) — what the 66 tests prove / don't
 
 ## Repo layout
 
 ```
 backend/app/{api,core,models,schemas,repositories,services,workflows,agents,events,utils}
 backend/app/integrations/{switch,storage,ai,notifications}
-backend/migrations/   (2 revisions)     backend/tests/ (61)
+backend/migrations/   (2 revisions)     backend/tests/ (66)
 docs/                                   docker-compose.yml  backend/Dockerfile
 ```
 

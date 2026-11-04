@@ -21,7 +21,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.core.database import get_session_factory
 from app.integrations.switch import get_switch_adapter, switch_status
 from app.models import IntegrationEvent, ProposedUse, SwitchRoomLink
-from app.services import tasks
 
 MAX_ATTEMPTS = 3
 
@@ -90,13 +89,12 @@ def main() -> int:
                 if evt.attempt_count >= MAX_ATTEMPTS:
                     evt.processing_status = "dead_letter"
                     parked += 1
-                    tasks.create_task(
+                    from app.integrations.notifications import notify_integration_failure
+                    notify_integration_failure(
                         session, project_id=use.project_id, participant_id=use.participant_id,
-                        task_type="integration_failure",
                         title="Switch delivery permanently failed",
-                        description=f"correlation_id={evt.correlation_id} error={evt.last_error}",
-                        priority="high", source_type="integration_event", source_id=evt.id,
-                        created_by_actor_type="integration",
+                        detail=f"correlation_id={evt.correlation_id} error={evt.last_error}",
+                        correlation_id=evt.correlation_id,
                     )
             retried += 1
 
