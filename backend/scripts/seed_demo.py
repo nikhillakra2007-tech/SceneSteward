@@ -44,6 +44,12 @@ USERS = [
 
 
 def main() -> int:
+    from app.core.database import system_context
+    with system_context():  # trusted seed scope (creates rows across all tables)
+        return _seed()
+
+
+def _seed() -> int:
     settings = get_settings()
     if settings.auth_provider != "dev":
         print("Refusing: seed script is for local dev (AUTH_PROVIDER=dev).", file=sys.stderr)

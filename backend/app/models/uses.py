@@ -43,10 +43,13 @@ class ProposedUseAnalysis(Base, CreatedAtMixin):
         CheckConstraint(f"outcome IN {in_clause(ANALYSIS_OUTCOMES)}", name="ck_analysis_outcome"),
         CheckConstraint("engine_version <> ''", name="ck_analysis_engine_version"),
         Index("ix_analyses_proposed_use", "proposed_use_id"),
+        Index("ix_analyses_project", "project_id"),
     )
 
     id: Mapped[uuid.UUID] = uuid_pk()
     proposed_use_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("proposed_uses.id", ondelete="CASCADE"), nullable=False)
+    # Denormalised for RLS tenancy scoping (set from the parent proposed use).
+    project_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
     outcome: Mapped[str] = mapped_column(String(40), nullable=False)
     findings: Mapped[list] = mapped_column(JSONB, nullable=False)
     matched_consent_record_ids: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))

@@ -121,25 +121,54 @@ def decode_token(token: str, settings: Settings | None = None) -> TokenClaims:
 
 # --- Encryption at rest for participant contact details -------------------
 
-def _fernet(s: Settings | None = None) -> Fernet:
+def _get_fernet_ring(s: Settings | None = None) -> tuple[str, dict[str, Fernet]]:
     s = s or get_settings()
-    if not s.app_encryption_key:
+    ring = s.resolved_encryption_key_ring
+    if not ring:
         raise Unauthenticated("Contact encryption is not configured", code="encryption_unavailable")
-    try:
-        return Fernet(s.app_encryption_key.encode())
-    except Exception as exc:  # bad key material: fail closed, never fall back to plaintext
-        raise Unauthenticated("Contact encryption is misconfigured", code="encryption_unavailable") from exc
+    fernet_ring: dict[str, Fernet] = {}
+    for kid, key_material in ring.items():
+        try:
+            fernet_ring[kid] = Fernet(key_material.encode("utf-8") if isinstance(key_material, str) else key_material)
+        except Exception as exc:  # bad key material: fail closed, never fall back to plaintext
+            raise Unauthenticated(f"Contact encryption key {kid} is misconfigured", code="encryption_unavailable") from exc
+    current_kid = s.app_encryption_current_kid or "primary"
+    if current_kid not in fernet_ring:
+        current_kid = next(iter(fernet_ring))
+    return current_kid, fernet_ring
 
 
-def encrypt_secret(plaintext: str, settings: Settings | None = None) -> str:
-    return _fernet(settings).encrypt(plaintext.encode("utf-8")).decode("ascii")
+def encrypt_secret(plaintext: str, settings: Settings | None = None, kid: str | None = None) -> str:
+    current_kid, ring = _get_fernet_ring(settings)
+    active_kid = kid or current_kid
+    if active_kid not in ring:
+        raise Unauthenticated(f"Encryption key {active_kid} is not available", code="encryption_unavailable")
+    token = ring[active_kid].encrypt(plaintext.encode("utf-8")).decode("ascii")
+    return f"v2.{active_kid}.{token}"
 
 
 def decrypt_secret(ciphertext: str, settings: Settings | None = None) -> str:
-    try:
-        return _fernet(settings).decrypt(ciphertext.encode("ascii")).decode("utf-8")
-    except InvalidToken as exc:
-        raise Unauthenticated("Stored contact data could not be decrypted", code="encryption_failed") from exc
+    current_kid, ring = _get_fernet_ring(settings)
+    if ciphertext.startswith("v2."):
+        parts = ciphertext.split(".", 2)
+        if len(parts) == 3:
+            kid, token = parts[1], parts[2]
+            f = ring.get(kid)
+            if not f:
+                raise Unauthenticated(f"Decryption key '{kid}' is not in key ring", code="encryption_failed")
+            try:
+                return f.decrypt(token.encode("ascii")).decode("utf-8")
+            except InvalidToken as exc:
+                raise Unauthenticated("Stored contact data could not be decrypted", code="encryption_failed") from exc
+
+    # Legacy ciphertext (without v2.<kid>. prefix): try current_kid first, then others
+    keys_to_try = [ring[current_kid]] + [f for k, f in ring.items() if k != current_kid]
+    for f in keys_to_try:
+        try:
+            return f.decrypt(ciphertext.encode("ascii")).decode("utf-8")
+        except InvalidToken:
+            continue
+    raise Unauthenticated("Stored contact data could not be decrypted", code="encryption_failed")
 
 
 def constant_time_equals(a: str, b: str) -> bool:

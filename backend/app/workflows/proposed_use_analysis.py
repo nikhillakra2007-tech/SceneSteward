@@ -45,6 +45,23 @@ def run_proposed_use_analysis(
     actor_user_id: uuid.UUID | None,
     correlation_id: uuid.UUID,
 ) -> dict[str, Any]:
+    """Trusted-worker scope: analysis persists agent runs and integration events."""
+    from app.core.database import system_context
+    with system_context(db):
+        return _run_proposed_use_analysis(
+            db, proposed_use=proposed_use, project_id=project_id,
+            actor_user_id=actor_user_id, correlation_id=correlation_id,
+        )
+
+
+def _run_proposed_use_analysis(
+    db: Session,
+    *,
+    proposed_use: ProposedUse,
+    project_id: uuid.UUID,
+    actor_user_id: uuid.UUID | None,
+    correlation_id: uuid.UUID,
+) -> dict[str, Any]:
     if proposed_use.project_id != project_id:
         raise NotFoundError("Proposed use not found")
 
@@ -61,6 +78,7 @@ def run_proposed_use_analysis(
 
     # 5. Persist the analysis (append-only)
     analysis = ProposedUseAnalysis(
+        project_id=project_id,
         proposed_use_id=proposed_use.id,
         outcome=result.outcome,
         findings=result.findings,
@@ -180,6 +198,8 @@ def run_proposed_use_analysis(
         correlation_id=correlation_id,
     )
 
+    db.flush()
+
     return {
         "analysis_id": analysis.id,
         "outcome": result.outcome,
@@ -263,6 +283,7 @@ def maybe_notify_switch(db, *, project_id, participant_id, proposed_use, result,
         correlation_id=correlation_id,
         payload_reference=f"proposed_use:{proposed_use.id}",
         payload_summary={"room_id": link.switch_room_id, "outcome": result.outcome},
+        project_id=project_id,
         processing_status="processed" if send.ok else "failed",
         attempt_count=1,
         last_error=None if send.ok else (send.error_code or "send_failed"),

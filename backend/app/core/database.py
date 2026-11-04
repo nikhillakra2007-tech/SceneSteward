@@ -1,35 +1,181 @@
 """Database engine/session management.
 
-Sync SQLAlchemy 2.x with psycopg v3. Sessions are scoped per-request via the
-FastAPI dependency; multi-record operations must run inside one transaction.
+Sync SQLAlchemy 2.x with psycopg v3.
+
+Security model
+--------------
+The runtime role is a NON-owner role subject to ROW LEVEL SECURITY
+(see migrations/versions/c7a1e52b93f0 and docs/DATABASE_SECURITY.md).
+Every connection transaction carries a transaction-local identity:
+
+    SELECT set_config('app.user_id', '<uuid>', true)     -- or app.system='on'
+
+`set_config(..., true)` is transaction-local: it is discarded when the
+transaction ends, so pooled connections can never leak identity across
+requests. An Engine "begin" listener injects it automatically from the
+contextvars below, so every session/transaction in the process is covered
+(sessions that never set an identity see ZERO rows — deny by default).
+
+- API layer       -> set_identity(user.id)  (per authenticated request)
+- System workers  -> system_context()       (listener, retry sweeper, seeds)
+- Admin/migration -> separate owner role, bypasses RLS by construction
 """
 from __future__ import annotations
 
+import contextlib
+import contextvars
+import logging
 from collections.abc import Generator
 from functools import lru_cache
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import get_settings
+
+logger = logging.getLogger("scenesteward.database")
+
+_identity_var: contextvars.ContextVar[str | None] = contextvars.ContextVar("identity", default=None)
+_system_var: contextvars.ContextVar[bool] = contextvars.ContextVar("system", default=False)
+
+
+def compute_identity_sig(user_id: str | None, secret: str | None = None) -> str:
+    if not user_id:
+        return ""
+    import hashlib
+    sec = secret or get_settings().database_identity_secret
+    return hashlib.sha256(f"{user_id}:{sec}".encode()).hexdigest()
+
+
+def compute_system_sig(secret: str | None = None) -> str:
+    import hashlib
+    sec = secret or get_settings().database_identity_secret
+    return hashlib.sha256(f"system:on:{sec}".encode()).hexdigest()
+
+
+def set_identity(user_id, session: Session | None = None) -> None:
+    _identity_var.set(str(user_id) if user_id else None)
+    _system_var.set(False)
+    if session is not None:
+        session.info["user_id"] = str(user_id) if user_id else None
+        session.info["system"] = False
+        if user_id:
+            try:
+                sig = compute_identity_sig(str(user_id))
+                session.execute(
+                    text("SELECT set_config('app.user_id', :uid, true), set_config('app.user_sig', :sig, true)"),
+                    {"uid": str(user_id), "sig": sig},
+                )
+            except SQLAlchemyError as exc:
+                logger.debug("Failed setting transaction user context: %s", exc)
+
+
+def clear_identity(session: Session | None = None) -> None:
+    _identity_var.set(None)
+    _system_var.set(False)
+    if session is not None:
+        session.info.pop("user_id", None)
+        session.info.pop("system", None)
+
+
+@contextlib.contextmanager
+def system_context(session: Session | None = None):
+    """Trusted server-side scope (listener, sweeper, seed, workflow)."""
+    was_system = _system_var.get()
+    token = _system_var.set(True)
+    if session is not None and not was_system:
+        session.info["system"] = True
+        try:
+            sig = compute_system_sig()
+            session.execute(
+                text("SELECT set_config('app.system', 'on', true), set_config('app.system_sig', :sig, true)"),
+                {"sig": sig},
+            )
+        except SQLAlchemyError as exc:
+            logger.debug("Failed setting transaction system context: %s", exc)
+    try:
+        yield
+    finally:
+        _system_var.reset(token)
+        if session is not None and not was_system:
+            session.info.pop("system", None)
+            try:
+                session.execute(
+                    text("SELECT set_config('app.system', 'off', true), set_config('app.system_sig', '', true)")
+                )
+            except SQLAlchemyError as exc:
+                logger.debug("Failed resetting transaction system context: %s", exc)
 
 
 @lru_cache
 def get_engine() -> Engine:
     settings = get_settings()
-    return create_engine(
+    engine = create_engine(
         settings.database_url,
         pool_size=10,
         max_overflow=20,
         pool_pre_ping=True,
         future=True,
     )
+    _install_rls_context_hook(engine)
+    return engine
+
+
+def _install_rls_context_hook(engine: Engine) -> None:
+    @event.listens_for(engine, "begin")
+    def _inject_identity(conn) -> None:
+        identity = _identity_var.get()
+        system = _system_var.get()
+        if system:
+            sig = compute_system_sig()
+            conn.exec_driver_sql(
+                "SELECT set_config('app.system', 'on', true), set_config('app.system_sig', %s, true)",
+                (sig,),
+            )
+        if identity:
+            sig = compute_identity_sig(str(identity))
+            conn.exec_driver_sql(
+                "SELECT set_config('app.user_id', %s, true), set_config('app.user_sig', %s, true)",
+                (str(identity), sig),
+            )
+
+    @event.listens_for(Session, "after_begin")
+    def _inject_identity_session(session, transaction, connection) -> None:
+        identity = session.info.get("user_id") or _identity_var.get()
+        system = session.info.get("system") or _system_var.get()
+        if system:
+            sig = compute_system_sig()
+            connection.exec_driver_sql(
+                "SELECT set_config('app.system', 'on', true), set_config('app.system_sig', %s, true)",
+                (sig,),
+            )
+        if identity:
+            sig = compute_identity_sig(str(identity))
+            connection.exec_driver_sql(
+                "SELECT set_config('app.user_id', %s, true), set_config('app.user_sig', %s, true)",
+                (str(identity), sig),
+            )
 
 
 @lru_cache
 def get_session_factory() -> sessionmaker[Session]:
     return sessionmaker(bind=get_engine(), autoflush=False, expire_on_commit=False, future=True)
+
+
+@lru_cache
+def get_admin_engine() -> Engine:
+    """Schema-owner engine. Bypasses RLS by construction. Migrations/admin only."""
+    settings = get_settings()
+    url = settings.migration_database_url or get_settings().database_url
+    engine = create_engine(url, pool_size=2, max_overflow=0, pool_pre_ping=True, future=True)
+    return engine
+
+
+@lru_cache
+def get_admin_session_factory() -> sessionmaker[Session]:
+    return sessionmaker(bind=get_admin_engine(), autoflush=False, expire_on_commit=False, future=True)
 
 
 def get_db() -> Generator[Session, None, None]:
@@ -40,6 +186,7 @@ def get_db() -> Generator[Session, None, None]:
         session.rollback()
         raise
     finally:
+        clear_identity(session)
         session.close()
 
 

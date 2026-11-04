@@ -173,6 +173,19 @@ def list_contacts(participant_id: uuid.UUID, db: DbSession, user: CurrentUser) -
         select(ParticipantContactRecord).where(ParticipantContactRecord.participant_id == participant.id)
         .order_by(ParticipantContactRecord.created_at.asc())
     ).scalars().all()
+    if rows:
+        audit.record(
+            db,
+            project_id=participant.project_id,
+            participant_id=participant.id,
+            actor_type="user",
+            actor_id=str(user.id),
+            action="participant_contact.read",
+            entity_type="participant",
+            entity_id=participant.id,
+            new_value={"contact_count": len(rows)},
+        )
+        db.commit()
     return [ContactRecordOut(
         id=r.id, participant_id=r.participant_id, contact_type=r.contact_type,
         value=decrypt_secret(r.encrypted_contact_data), verified_at=r.verified_at,

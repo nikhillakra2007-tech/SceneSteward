@@ -16,18 +16,25 @@ sys.path.insert(0, str(BACKEND_ROOT))
 if os.environ.get("ALEMBIC_DATABASE_URL"):
     os.environ["DATABASE_URL"] = os.environ["ALEMBIC_DATABASE_URL"]
 
-from app.core.config import get_settings  # noqa: E402
-from app.models import Base  # noqa: E402
+from app.core.config import get_settings
+from app.models import Base
 
 config = context.config
 if config.config_file_name:
     fileConfig(config.config_file_name)
 
+# Alembic connects as a schema owner/migration role — never as the runtime role.
+_migrate_url = (
+    os.environ.get("ALEMBIC_DATABASE_URL")
+    or os.environ.get("MIGRATION_DATABASE_URL")
+    or get_settings().migration_database_url
+    or os.environ.get("DATABASE_URL")
+    or get_settings().database_url
+)
+config.set_main_option("sqlalchemy.url", _migrate_url)
+
 settings = get_settings()
 target_metadata = Base.metadata
-
-# Allow tests/CI to point at a scratch database without touching the dev one.
-config.set_main_option("sqlalchemy.url", os.environ.get("ALEMBIC_DATABASE_URL", settings.database_url))
 
 
 def run_migrations_offline() -> None:

@@ -39,6 +39,12 @@ def external_event_id(raw: dict[str, Any]) -> str:
 
 def record_inbound_event(db: Session, raw: dict[str, Any]) -> tuple[str, uuid.UUID | None]:
     """Validate + persist an inbound event. Returns (status, event_uuid|None)."""
+    from app.core.database import system_context
+    with system_context():
+        return _record_inbound_event(db, raw)
+
+
+def _record_inbound_event(db: Session, raw: dict[str, Any]) -> tuple[str, uuid.UUID | None]:
     room_id = None
     data = raw.get("data") if isinstance(raw.get("data"), dict) else raw
     if isinstance(data, dict):
@@ -52,6 +58,7 @@ def record_inbound_event(db: Session, raw: dict[str, Any]) -> tuple[str, uuid.UU
         integration_name="switch",
         event_type=str(raw.get("type") or "unknown"),
         external_event_id=external_event_id(raw),
+        project_id=link.project_id if link else None,
         payload_reference=f"room:{room_id}" if room_id else None,
         payload_summary={"type": raw.get("type"), "room_id": room_id,
                          "mapped_project_id": str(link.project_id) if link else None,

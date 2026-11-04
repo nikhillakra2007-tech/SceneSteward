@@ -37,6 +37,11 @@ from app.schemas.documents import (
     UploadUrlResponse,
 )
 from app.services import audit
+from app.services.malware_scanner import (
+    ScanStatus,
+    scan_bytes,
+    verify_decompression_safety,
+)
 from app.utils.pagination import PageParams, page_params
 
 router = APIRouter(tags=["documents"])
@@ -125,6 +130,32 @@ def complete_upload(participant_id: uuid.UUID, payload: CompleteUploadRequest,
         provider.delete(payload.storage_key)
         raise PreconditionFailed("File content does not match an allowed document type; discarded",
                                  code="mime_mismatch")
+
+    content_bytes = provider.read_bytes(payload.storage_key)
+
+    # 1. Decompression bomb & archive path traversal guard (DOCX/ZIP containers)
+    try:
+        verify_decompression_safety(content_bytes, max_uncompressed_bytes=settings.max_uncompressed_bytes)
+    except PreconditionFailed:
+        provider.delete(payload.storage_key)
+        raise
+
+    # 2. Antivirus / malware scan
+    scan = scan_bytes(content_bytes, settings=settings)
+    if scan.status == ScanStatus.INFECTED:
+        provider.delete(payload.storage_key)
+        raise PreconditionFailed(
+            f"Malware detected in uploaded document ({scan.virus_name}); discarded",
+            code="malware_detected",
+        )
+    if scan.status in (ScanStatus.UNAVAILABLE, ScanStatus.TIMEOUT, ScanStatus.ERROR) and (
+        settings.antivirus_fail_closed or settings.is_production
+    ):
+        provider.delete(payload.storage_key)
+        raise PreconditionFailed(
+            f"Malware scanner is unavailable ({scan.status.value}); upload rejected",
+            code="malware_scanner_unavailable",
+        )
 
     document = ReleaseDocument(
         project_id=participant.project_id,
