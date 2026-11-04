@@ -12,11 +12,18 @@ build/
 
 # Environment & secrets
 .env
+.env.*
+!.env.example
+!.env.staging.example
+!*.example
 *.local
 
 # Data & storage
+var/
 backend/var/
 *.sqlite3
+*.dump
+*.tar
 
 # IDE / OS
 .idea/
@@ -26,7 +33,9 @@ Thumbs.db
 
 # Logs
 *.log
+logs/
 backend/logs/
 
 # Alembic local artifacts
+migrations/versions/__pycache__/
 backend/migrations/versions/__pycache__/

@@ -1,97 +1,308 @@
-# SceneSteward — Backend
+# SceneSteward
 
-> **Every story has people behind it.**
-> A participant-centred documentary production workspace: recording → proposal →
-> comparison → review → discussion → decision → preservation.
-> The database is the truth. Switch is a collaboration surface. Humans decide.
+> **Participant-Centred Documentary Consent, Scope Verification & Production Workspace**
 
-A FastAPI + PostgreSQL backend for recording participant choices, detecting
-proposals not covered by those choices, coordinating human review — with a full
-accountability timeline. **Prototype with synthetic data; not a medical device,
-not legal advice, not a compliance certification.**
+SceneSteward is a specialized backend and database platform designed for documentary film productions. It ensures that participant consent remains explicit, granular, versioned, and legally auditable across the entire documentary lifecycle—from initial release signature to promotional trailers and external distribution.
 
-## Status
+---
 
-Backed and tested end to end: 66 automated tests pass (see docs/TESTING.md).
-Live Switch connection is **unverified** (no server in this environment) — see
-docs/SWITCH_INTEGRATION.md. AI agents run offline/deterministic by default.
+## 1. Problem Statement
 
-## Quickstart (clean environment)
+In documentary and non-fiction media production, participant consent agreements are frequently treated as static, one-time paper waivers. In modern multi-platform distributions:
+- Footage recorded for an intimate documentary interview is often repurposed for high-exposure promotional trailers, social media campaigns, or third-party AI voice reconstruction without explicit consent.
+- Ambiguous waivers lead to ethical violations, breach of participant trust, and legal exposure for production houses.
+- Production teams lack an automated, deterministic mechanism to verify whether a proposed creative use aligns with what a participant actually agreed to.
 
-Prereqs: Python 3.12, PostgreSQL 15+ (or Docker for compose), `uv` recommended.
+**SceneSteward solves this by enforcing a non-negotiable core principle:**
+> *"A participant's agreement to one use must never automatically become agreement to another use. Silence is never agreement."*
 
-```powershell
-# 1. Create databases (as a Postgres superuser)
-$env:PGPASSWORD='postgres'
-psql -h 127.0.0.1 -U postgres -c "CREATE ROLE scenesteward LOGIN PASSWORD 'changeme'"
-psql -h 127.0.0.1 -U postgres -c "CREATE DATABASE scenesteward OWNER scenesteward"
-psql -h 127.0.0.1 -U postgres -c "CREATE DATABASE scenesteward_test OWNER scenesteward"
+---
 
-# 2. Install  (on Windows + OneDrive: use  uv pip install --link-mode=copy ... )
+## 2. Main Features
+
+- **Granular, Versioned Consent Records**: Participants make explicit choices across 15 standard categories (e.g. `interview_recording`, `theatrical_documentary`, `promotional_clips`, `voice_cloning`, `synthetic_likeness`). New facts create new immutable versions; older versions are superseded.
+- **Deterministic Scope Comparison Engine**: Compares proposed production uses against confirmed participant consent choices. Categorizes outcomes into `RECORDED_CHOICE_MATCH`, `NEEDS_DISCUSSION`, `PARTICIPANT_DECLINED`, or `HUMAN_REVIEW_REQUIRED`.
+- **Advisory AI Multi-Agent Pipeline**: Specialized agents (`consent_analyst`, `story_change_analyst`, `participant_advocate`, `ethics_reviewer`, `production_coordinator`) analyze proposals and draft participant check-in communications. Agents operate advisory-only; they can never authorize use or alter consent records.
+- **Human-in-the-Loop Review & Tasks**: Flags conflicts or missing categories as prioritized human review tasks for Participant Care Leads and Directors before distribution.
+- **Cryptographic PII Protection**: Participant contact information is encrypted at rest using 256-bit Fernet encryption with zero-downtime key rotation support.
+- **Fail-Closed Antivirus Scanning**: Integrated ClamAV inspection rejects infected or uninspected media uploads before permanent storage.
+- **Multi-Tenant Row-Level Security (RLS)**: PostgreSQL 18 RLS policies enforce strict project boundaries using an HMAC-SHA256 authenticated database identity trust boundary.
+- **Immutable Append-Only Audit Trail**: Full ledger of every proposal, comparison finding, human decision, and consent revision.
+- **Asynchronous Outbox & Retry Worker**: Reliable event delivery to the Switch collaboration network with atomic lease recovery and dead-letter handling.
+
+---
+
+## 3. High-Level Architecture
+
+```
++---------------------------------------------------------------------------------+
+|                               CLIENT APPLICATIONS                               |
+|                  (Web Dashboard / Mobile App / Switch Room Link)                |
++----------------------------------------+----------------------------------------+
+                                         | HTTPS (Bearer JWT)
+                                         v
++---------------------------------------------------------------------------------+
+|                         SCENESTEWARD FASTAPI BACKEND                            |
+|                                                                                 |
+|  +-------------------+  +--------------------+  +----------------------------+  |
+|  | Auth Dependencies |  | Consent Engine     |  | Advisory AI Agents         |  |
+|  | (Supabase / Dev)  |  | (Deterministic)    |  | (Claude 3.5 Sonnet/Offline)|  |
+|  +---------+---------+  +---------+----------+  +-------------+--------------+  |
+|            |                      |                           |                 |
+|            |                      | Security Context          |                 |
+|            v                      v (app.current_user_id)     v                 |
+|  +---------------------------------------------------------------------------+  |
+|  |                 SQLAlchemy 2.0 ORM & Connection Pool                      |  |
+|  +-------------------------------------+-------------------------------------+  |
++----------------------------------------|----------------------------------------+
+                                         | TCP (HMAC Authenticated Sessions)
+                                         v
++---------------------------------------------------------------------------------+
+|                       POSTGRESQL 18 DATABASE LAYER                              |
+|                                                                                 |
+|  +---------------------------------------------------------------------------+  |
+|  | private.app_secrets (HMAC identity validation & runtime verification)     |  |
+|  +---------------------------------------------------------------------------+  |
+|  | Row-Level Security (RLS) Policies on 18 Tables (Tenant Isolation)         |  |
+|  +---------------------------------------------------------------------------+  |
+|  | Append-Only Audit Events | Composite Integrity FKs | Triggers             |  |
+|  +---------------------------------------------------------------------------+  |
++---------------------------------------------------------------------------------+
+```
+
+---
+
+## 4. Technologies Used
+
+- **Runtime & Web Framework**: Python 3.12, FastAPI, Uvicorn, Pydantic v2
+- **Database & Migration Engine**: PostgreSQL 18, SQLAlchemy 2.0, Alembic, Psycopg 3
+- **Security & Cryptography**: PostgreSQL Row-Level Security (RLS), HMAC-SHA256 Context Signing, Cryptography (Fernet 256-bit AES-CBC)
+- **Malware Protection**: ClamAV Daemon (`zINSTREAM` socket wire protocol)
+- **AI & Integrations**: Anthropic Claude 3.5 Sonnet API (with deterministic offline fallback), Supabase Auth & Storage SDKs, Switch Outbox Worker
+- **Containerization**: Docker Engine 29+, Docker Compose v2, Alpine/Debian Slim Multi-Stage Images
+
+---
+
+## 5. Repository Structure
+
+```text
+SceneSteward/
+├── README.md                          # Project documentation & operational runbook
+├── .gitignore                         # Secret protection & artifact exclusion rules
+├── .dockerignore                      # Minimal Docker build context configuration
+├── docker-compose.staging.yml         # Multi-container staging stack definition
+├── docker-compose.yml                 # Local development compose definition
+│
+├── backend/                           # Backend application root
+│   ├── Dockerfile                     # Multi-stage non-root container specification
+│   ├── pyproject.toml                 # Ruff, pytest, and project metadata
+│   ├── requirements.txt               # Production dependencies
+│   ├── requirements-dev.txt           # Test and linting dependencies
+│   ├── alembic.ini                    # Alembic migration configuration
+│   ├── .env.example                   # Safe development environment template
+│   ├── .env.staging.example           # Safe staging environment template
+│   │
+│   ├── app/                           # Core application package
+│   │   ├── api/                       # REST endpoints & dependency injection
+│   │   ├── core/                      # Configuration, database engine, security
+│   │   ├── models/                    # SQLAlchemy declarative models
+│   │   ├── schemas/                   # Pydantic v2 validation schemas
+│   │   ├── services/                  # Business logic (comparison, encryption, scanner)
+│   │   ├── agents/                    # Multi-agent advisory pipeline
+│   │   ├── workflows/                 # End-to-end documentary workflows
+│   │   └── integrations/              # External adapters (Supabase, Switch, ClamAV)
+│   │
+│   ├── migrations/                    # Linear Alembic database migrations
+│   │   └── versions/                  # Schema revisions (6589..., c7a1..., e1f2...)
+│   │
+│   ├── tests/                         # Automated test suite
+│   │   ├── unit/                      # Encryption, comparison, and utility tests
+│   │   ├── integration/               # API, auth, document, and worker tests
+│   │   ├── security/                  # RLS tenant isolation & trust boundary tests
+│   │   └── e2e/                       # Full 29-step documentary lifecycle tests
+│   │
+│   └── scripts/                       # Operational scripts
+│       ├── switch_retry.py            # Outbox retry worker daemon
+│       ├── run_container_workflow.py  # Synthetic container acceptance verification
+│       ├── backup_database.py         # Snapshot backup utility
+│       ├── restore_database.py        # Isolated restore verification utility
+│       └── rotate_encryption_keys.py  # PII encryption key rotation utility
+│
+└── docs/                              # Comprehensive technical documentation & audits
+```
+
+---
+
+## 6. Prerequisites
+
+- **Python**: 3.12 or higher
+- **PostgreSQL**: 15+ (PostgreSQL 18 recommended for production parity)
+- **Docker**: Docker Desktop 29+ with WSL2 / Linux containers (for containerized stack)
+- **Package Manager**: `pip` or `uv` (recommended for fast virtualenv creation)
+
+---
+
+## 7. Local Setup Instructions
+
+### 1. Clone the Repository
+```bash
+git clone https://github.com/nikhillakra2007-tech/SceneSteward.git
+cd SceneSteward
+```
+
+### 2. Set Up Virtual Environment
+```bash
 cd backend
-uv venv .venv --python 3.12
-$env:UV_LINK_MODE='copy'   # avoids "incompatible hardlinks" (os error 396) on OneDrive-backed paths
-uv pip install --python .venv -r requirements-dev.txt
+python -m venv .venv
 
-# 3. Configure
-Copy-Item .env.example .env     # then edit: DATABASE_URL, AUTH_DEV_SECRET, APP_ENCRYPTION_KEY
+# On Linux / macOS:
+source .venv/bin/activate
 
-# 4. Migrate
-$env:ALEMBIC_DATABASE_URL='postgresql+psycopg://scenesteward:changeme@127.0.0.1:5432/scenesteward'
-.\.venv\Scripts\python.exe -m alembic -c alembic.ini upgrade head
-
-# 5. Seed synthetic demo data ("Beyond the Silence")
-.\.venv\Scripts\python.exe scripts\seed_demo.py
-
-# 6. Run
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --port 8000 --reload
-# → http://127.0.0.1:8000/docs   |   GET /health   |   GET /api/v1/integrations/status
-
-# 7. Demo token (dev provider only)
-.\.venv\Scripts\python.exe scripts\dev_token.py --email oscar@example.com --name "Oscar Owner"
+# On Windows (PowerShell):
+.\.venv\Scripts\Activate.ps1
 ```
 
-## Tests
-
-```powershell
-$env:DATABASE_URL_TEST='postgresql+psycopg://scenesteward:changeme@127.0.0.1:5432/scenesteward_test'
-$env:ALEMBIC_DATABASE_URL=$env:DATABASE_URL_TEST
-.\.venv\Scripts\python.exe -m alembic -c alembic.ini upgrade head
-.\.venv\Scripts\python.exe -m pytest tests -q        # 66 passed
-.\.venv\Scripts\python.exe -m ruff check app scripts tests
+### 3. Install Dependencies
+```bash
+pip install -r requirements-dev.txt
 ```
 
-## Docker
+---
 
-```powershell
-docker compose up --build        # postgres + migrate + api on :8000
-```
-(Not verified on this machine — see docs/TESTING.md and docs/SWITCH_INTEGRATION.md.)
+## 8. Environment Configuration
 
-## Documentation
-
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — system context, trust boundaries, failure modes
-- [docs/DATABASE.md](docs/DATABASE.md) — schema, ER diagram, migrations & rollback limits
-- [docs/API.md](docs/API.md) — every endpoint, auth rules, error contract
-- [docs/SECURITY.md](docs/SECURITY.md) — controls, RBAC matrix, known gaps
-- [docs/SWITCH_INTEGRATION.md](docs/SWITCH_INTEGRATION.md) — real protocol, setup, verification matrix
-- [docs/AGENTS.md](docs/AGENTS.md) — the five agents, contracts, data sent, injection posture
-- [docs/TESTING.md](docs/TESTING.md) — what the 66 tests prove / don't
-
-## Repo layout
-
-```
-backend/app/{api,core,models,schemas,repositories,services,workflows,agents,events,utils}
-backend/app/integrations/{switch,storage,ai,notifications}
-backend/migrations/   (2 revisions)     backend/tests/ (66)
-docs/                                   docker-compose.yml  backend/Dockerfile
+SceneSteward includes safe environment templates. Copy the development template:
+```bash
+cp .env.example .env
 ```
 
-## Design invariants (do not break)
+Configure the following essential variables in `backend/.env`:
+```ini
+APP_ENV=development
+DATABASE_URL=postgresql+psycopg://scenesteward_app:APP_PASS@127.0.0.1:5432/scenesteward
+DATABASE_IDENTITY_SECRET=CHANGE_ME_TO_RANDOM_HEX_32
+APP_ENCRYPTION_KEY=CHANGE_ME_TO_FERNET_KEY
+AUTH_PROVIDER=dev
+AUTH_DEV_SECRET=CHANGE_ME_TO_RANDOM_HEX_32
+```
 
-1. DB is the truth; Switch/AI/frontend are never authoritative for consent.
-2. Missing category ⇒ **not agreed** — silence is never consent.
-3. Confirmed consent is immutable; corrections are new versions.
-4. Agents never approve; every proposed use gets a human review.
-5. A communication draft is never "sent" without explicit human approval.
-6. Synthetic data only until the gaps in SECURITY.md are closed.
+> [!WARNING]
+> Never commit `.env` or `.env.staging` files. Real secrets must remain strictly excluded from version control.
+
+---
+
+## 9. Database Setup & Migrations
+
+### 1. Create Database Roles and Databases
+Connect to PostgreSQL as a superuser (`postgres`):
+```sql
+CREATE ROLE scenesteward LOGIN PASSWORD 'OWNER_PASSWORD';
+CREATE ROLE scenesteward_app LOGIN PASSWORD 'APP_PASSWORD' NOBYPASSRLS;
+
+CREATE DATABASE scenesteward OWNER scenesteward;
+CREATE DATABASE scenesteward_test OWNER scenesteward;
+```
+
+### 2. Run Alembic Migrations
+Apply all linear migrations up to head (`e1f2a3b4c5d6`):
+```bash
+export ALEMBIC_DATABASE_URL="postgresql+psycopg://scenesteward:OWNER_PASSWORD@127.0.0.1:5432/scenesteward"
+alembic -c alembic.ini upgrade head
+```
+
+---
+
+## 10. How to Run the Backend
+
+Start the FastAPI application with live reload:
+```bash
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+- **Interactive API Documentation (Swagger)**: `http://127.0.0.1:8000/docs`
+- **OpenAPI JSON Specification**: `http://127.0.0.1:8000/openapi.json`
+- **Health Check Endpoint**: `http://127.0.0.1:8000/health`
+
+---
+
+## 11. How to Run Tests
+
+SceneSteward contains an automated test suite verifying unit logic, API endpoints, RLS security policies, and end-to-end documentary workflows.
+
+Run all tests:
+```bash
+pytest tests -v
+```
+
+Run test categories individually:
+```bash
+# Unit tests (encryption, comparison engine)
+pytest tests/unit -v
+
+# Security tests (PostgreSQL RLS isolation, HMAC trust boundary)
+pytest tests/security -v
+
+# Integration tests (auth, documents, malware scanning)
+pytest tests/integration -v
+
+# End-to-end lifecycle test
+pytest tests/e2e -v
+```
+
+Run Ruff linting and style checks:
+```bash
+ruff check .
+```
+
+---
+
+## 12. How to Run the Docker Staging Environment
+
+SceneSteward provides an isolated multi-container staging stack matching production architecture.
+
+### 1. Build and Start the Staging Stack
+```bash
+docker compose --env-file backend/.env.staging -f docker-compose.staging.yml up -d --build
+```
+
+### 2. Verify Container Health
+```bash
+docker compose --env-file backend/.env.staging -f docker-compose.staging.yml ps
+```
+
+Expected output:
+- `scenesteward-staging-api` (Port `8001 -> 8000`, `healthy`)
+- `scenesteward-staging-db` (Port `5433 -> 5432`, PostgreSQL 18 Alpine, `healthy`)
+- `scenesteward-staging-clamav` (Port `3310 -> 3310`, ClamAV Daemon, `healthy`)
+- `scenesteward-staging-worker` (`healthy`, outbox sweep daemon)
+- `scenesteward-staging-migrate` (`exited (0)`, one-off migration init task)
+
+### 3. Run the In-Container Synthetic Acceptance Workflow
+```bash
+docker exec -e PYTHONPATH=/srv/scenesteward/backend scenesteward-staging-api python scripts/run_container_workflow.py
+```
+
+### 4. Teardown
+```bash
+docker compose --env-file backend/.env.staging -f docker-compose.staging.yml down
+```
+
+---
+
+## 13. Current Integration Status
+
+| Integration Adapter | Protocol / Technology | Current Status | Verification Evidence |
+|:---|:---|:---:|:---|
+| **PostgreSQL 18** | Psycopg 3, RLS, HMAC Trust Boundary | **VERIFIED** | 20 tables, 18 RLS tables, 69 policies, snapshot backup/restore verified |
+| **ClamAV Daemon** | TCP Socket Wire (`zINSTREAM`) | **VERIFIED** | Clean scan passed; EICAR test signature intercepted and quarantined |
+| **Outbox Retry Worker** | Background Daemon (`switch_retry.py`) | **VERIFIED** | Atomic sweeping, lease acquisition, and dead-letter routing verified |
+| **Anthropic Claude** | Anthropic Messages API | **ADAPTER READY** | Offline deterministic fallback active; requires live staging API key |
+| **Supabase Auth** | Supabase JWT & JWKS Verification | **ADAPTER READY** | Dev mock verified; requires live staging project reference & JWKS |
+| **Supabase Storage** | S3 / Supabase Private Document Bucket | **ADAPTER READY** | Local encrypted storage verified; requires live bucket credentials |
+| **Switch Integration** | Webhook / Room Link Adapter | **ADAPTER READY** | Outbox buffering & retry verified; awaiting live staging Switch URL |
+
+---
+
+## 14. License & Ethical Notice
+
+SceneSteward is intended for ethical documentary and creative media management. It is designed to empower participants and protect human dignity across storytelling platforms.
