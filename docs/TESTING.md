@@ -52,18 +52,28 @@ cannot trigger extraction or proposals; corrupt PDFs degrade to
 ```powershell
 cd backend
 python -m venv .venv ; .\.venv\Scripts\Activate.ps1
+$env:UV_LINK_MODE='copy'    # OneDrive-backed paths only
 uv pip install --python .venv -r requirements-dev.txt   # or pip install -r requirements-dev.txt
 # create test DB once:
 $env:PGPASSWORD='postgres'
 psql -h 127.0.0.1 -U postgres -c "CREATE DATABASE scenesteward_test OWNER scenesteward"
 psql -h 127.0.0.1 -U postgres -c "CREATE ROLE scenesteward LOGIN PASSWORD '<pw>'"   # if missing
 $env:DATABASE_URL_TEST='postgresql+psycopg://scenesteward:<pw>@127.0.0.1:5432/scenesteward_test'
-alembic -c alembic.ini upgrade head     # with ALEMBIC_DATABASE_URL set to the TEST db
+$env:ALEMBIC_DATABASE_URL=$env:DATABASE_URL_TEST
+alembic -c alembic.ini upgrade head
 pytest tests -v
 ```
 
+No `.env` is needed for tests — `conftest.py` forces `APP_ENV=test`, a test-only
+`AUTH_DEV_SECRET`/`APP_ENCRYPTION_KEY`, `AI_PROVIDER=offline`, and `SWITCH_ADAPTER=test`.
+`ALEMBIC_DATABASE_URL` overrides `DATABASE_URL` for migration commands only.
+
 `conftest.py` **hard-aborts** unless the effective database name ends in `_test` —
 it is impossible to run the suite against the dev database by accident.
+
+**Clean checkout verified (2026-11-04):** `git clone` → `uv venv` →
+`pip install -r requirements-dev.txt` → `alembic upgrade head` → `pytest` → **66 passed**
+with no `.env` and no manual secrets.
 
 Every test truncates all tables before running (fresh, isolated state, same process
 connection pool) — no test order dependence.

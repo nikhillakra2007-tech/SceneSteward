@@ -27,9 +27,10 @@ psql -h 127.0.0.1 -U postgres -c "CREATE ROLE scenesteward LOGIN PASSWORD 'chang
 psql -h 127.0.0.1 -U postgres -c "CREATE DATABASE scenesteward OWNER scenesteward"
 psql -h 127.0.0.1 -U postgres -c "CREATE DATABASE scenesteward_test OWNER scenesteward"
 
-# 2. Install
+# 2. Install  (on Windows + OneDrive: use  uv pip install --link-mode=copy ... )
 cd backend
 uv venv .venv --python 3.12
+$env:UV_LINK_MODE='copy'   # avoids "incompatible hardlinks" (os error 396) on OneDrive-backed paths
 uv pip install --python .venv -r requirements-dev.txt
 
 # 3. Configure
