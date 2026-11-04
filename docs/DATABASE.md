@@ -53,9 +53,17 @@ append-only by trigger, not by convention.
 | agent_runs | AI invocation trace | CHECK(agent_name, execution_status); INDEX(project_id, agent_name), (proposed_use_id), (execution_status) |
 | participant_communications | drafts (never auto-sent) | CHECK(status; **sent requires approved_by + sent_at**); INDEX(project_id, participant_id), (status) |
 | audit_events | accountability timeline | append-only by trigger; INDEX(participant_id, timestamp), (project_id, timestamp), (entity_type, entity_id), (correlation_id) |
-| integration_events | external idempotency | UNIQUE(integration_name, external_event_id); CHECK(processing_status, attempt_count ≥ 0); INDEX(processing_status, created_at), (correlation_id) |
+| integration_events | external idempotency | UNIQUE(integration_name, external_event_id); CHECK(processing_status, attempt_count ≥ 0); INDEX(processing_status, created_at), (correlation_id), (project_id) |
 | tasks | human-owned work | CHECK(type, status, priority, actor_type); INDEX(project_id, status), (owner_user_id, status), (participant_id), (source_type, source_id) |
 | switch_room_links | Switch room correlation | UNIQUE(switch_room_id); UNIQUE(project_id, participant_id, room_type) |
+
+## Row Level Security & Database Roles
+
+PostgreSQL Row Level Security (RLS) is enabled across all 18 project-scoped tables:
+- **Runtime Role:** `scenesteward_app` (DML only, `NOBYPASSRLS`). The web application and background workers connect strictly under this identity.
+- **Migration Role:** `scenesteward` (schema owner, `BYPASSRLS`). Used exclusively for running Alembic migrations.
+- **Transaction-Local Identity:** Every transaction injects `app.user_id` or `app.system='on'` using `set_config(..., true)`. Connections without an active context see zero rows (deny by default).
+- For complete policy details and threat modeling, see [docs/DATABASE_SECURITY.md](DATABASE_SECURITY.md).
 
 ## Consent versioning model
 
@@ -93,7 +101,9 @@ a bad production migration = restore from backup + forward-fix migration.
 
 ## Migrations
 
-`alembic -c alembic.ini upgrade head` — two revisions: `65898c97090c` (schema)
-then `b3f9c21a7d44` (triggers). Verified: clean upgrade on empty DB, downgrade to
-base, re-upgrade; foreign keys, unique + CHECK constraints, and trigger enforcement
-are exercised by `tests/integration/test_migrations.py`.
+`alembic -c alembic.ini upgrade head` — three revisions:
+1. `65898c97090c`: Initial core tables, constraints, foreign keys, and indexes.
+2. `b3f9c21a7d44`: Immutability triggers on `consent_records`, `consent_choices`, and `audit_events`.
+3. `c7a1e52b93f0`: Least-privilege roles (`scenesteward_app`, `scenesteward_readonly`), Row Level Security policies across all 18 project-scoped tables, helper security-definer functions (`app_is_member`, `app_has_role`), and `integration_events.project_id` foreign key.
+
+Verified: clean upgrade on empty DB, downgrade to base, re-upgrade; foreign keys, unique + CHECK constraints, trigger enforcement, and RLS isolation are exercised by `tests/integration/test_migrations.py` and `tests/security/test_rls_isolation.py`.

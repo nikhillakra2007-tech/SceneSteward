@@ -137,10 +137,20 @@ GET    /projects/{pid}/timeline[?limit&cursor]      members; viewers see non-sen
 GET    /participants/{id}/timeline                  member / self
 ```
 
-## Health & integration status (unauthenticated, secret-free)
+## Participant Communications (draft → approved → sent)
 ```
-GET    /health            liveness
-GET    /health/ready      {"status":"ok|degraded","checks":{"database":"ok|unavailable"}}
+POST   /projects/{pid}/communications               owner|producer|care_lead (creates draft)
+GET    /projects/{pid}/communications               owner|producer|care_lead (list drafts & history)
+POST   /communications/{id}/approve                 owner|producer|care_lead (human approval required)
+POST   /communications/{id}/send                    owner|producer|care_lead (fails closed 503 if no provider)
+```
+
+## Health, Metrics & Integration Status (secret-free)
+```
+GET    /health                                      liveness
+GET    /health/ready                                {"status":"ok|degraded","checks":{"database":"ok|unavailable"}}
+GET    /api/v1/metrics                              operational request counts, latency & DB pool stats (JSON)
+GET    /api/v1/metrics?format=prometheus            Prometheus format
 GET    /api/v1/integrations/status
        → postgresql | storage | ai_provider | switch | auth | redis
          ∈ configured_verified | configured_unverified | missing_credentials |
