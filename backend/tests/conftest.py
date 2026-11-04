@@ -25,6 +25,9 @@ os.environ["AI_PROVIDER"] = "offline"
 os.environ["SWITCH_ADAPTER"] = "test"
 os.environ["STORAGE_PROVIDER"] = "local"
 os.environ["STORAGE_LOCAL_PATH"] = str(BACKEND_ROOT / "var" / "storage-test")
+# Deterministic TEST-ONLY secrets (never used outside pytest):
+os.environ.setdefault("AUTH_DEV_SECRET", "test-only-dev-secret-not-for-production-0123456789abcdef0123456789abcdef")
+os.environ.setdefault("APP_ENCRYPTION_KEY", "67yRWp6G4NQfdYCVyaajG5JspDXj6h8qHmly0wKpDkM=")
 
 _url = os.environ["DATABASE_URL"]
 if not _url.rsplit("/", 1)[-1].endswith("_test"):
