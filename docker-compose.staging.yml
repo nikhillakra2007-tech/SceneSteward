@@ -1,0 +1,153 @@
+# SceneSteward — Staging Docker Compose Stack
+# Isolated staging environment with dedicated database, ClamAV daemon, migration runner, API, and worker.
+services:
+  db:
+    image: postgres:18-alpine
+    container_name: scenesteward-staging-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-scenesteward_staging}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-staging_db_secure_pass_2026}
+      POSTGRES_DB: ${POSTGRES_DB:-scenesteward_staging}
+    ports:
+      - "${STAGING_DB_PORT:-5433}:5432"
+    volumes:
+      - scenesteward-staging-pgdata:/var/lib/postgresql
+    networks:
+      - scenesteward-staging-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  clamav:
+    image: clamav/clamav:latest
+    container_name: scenesteward-staging-clamav
+    ports:
+      - "${CLAMAV_PORT:-3310}:3310"
+    volumes:
+      - scenesteward-staging-clamav:/var/lib/clamav
+    networks:
+      - scenesteward-staging-net
+    healthcheck:
+      test: ["CMD-SHELL", "clamdscan /etc/passwd || exit 0"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 60s
+
+  migrate:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: scenesteward-staging-migrate
+    command: ["alembic", "-c", "alembic.ini", "upgrade", "head"]
+    environment:
+      APP_ENV: staging
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-scenesteward_staging}:${POSTGRES_PASSWORD:-staging_db_secure_pass_2026}@db:5432/${POSTGRES_DB:-scenesteward_staging}
+      MIGRATION_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-scenesteward_staging}:${POSTGRES_PASSWORD:-staging_db_secure_pass_2026}@db:5432/${POSTGRES_DB:-scenesteward_staging}
+      DATABASE_IDENTITY_SECRET: ${DATABASE_IDENTITY_SECRET:-scenesteward_staging_identity_trust_secret_2026}
+      AUTH_PROVIDER: ${AUTH_PROVIDER:-supabase}
+      APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY:-rfbmYlSxk4ofQ0EM8KbeAiGRGQjEoOvbxZV2-WsRZ-k=}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - scenesteward-staging-net
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: scenesteward-staging-api
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2", "--proxy-headers"]
+    environment:
+      APP_ENV: staging
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-scenesteward_staging}:${POSTGRES_PASSWORD:-staging_db_secure_pass_2026}@db:5432/${POSTGRES_DB:-scenesteward_staging}
+      DATABASE_IDENTITY_SECRET: ${DATABASE_IDENTITY_SECRET:-scenesteward_staging_identity_trust_secret_2026}
+      AUTH_PROVIDER: ${AUTH_PROVIDER:-supabase}
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+      AUTH_JWKS_URL: ${AUTH_JWKS_URL:-}
+      AUTH_ISSUER: ${AUTH_ISSUER:-}
+      AUTH_AUDIENCE: ${AUTH_AUDIENCE:-authenticated}
+      APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY:-}
+      APP_ENCRYPTION_CURRENT_KID: ${APP_ENCRYPTION_CURRENT_KID:-staging-primary-v1}
+      APP_ENCRYPTION_KEYS: ${APP_ENCRYPTION_KEYS:-}
+      STORAGE_PROVIDER: ${STORAGE_PROVIDER:-supabase}
+      STORAGE_BUCKET: ${STORAGE_BUCKET:-scenesteward-staging-documents}
+      AI_PROVIDER: ${AI_PROVIDER:-anthropic}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-claude-sonnet-4-5}
+      SWITCH_ADAPTER: ${SWITCH_ADAPTER:-http}
+      SWITCH_BASE_URL: ${SWITCH_BASE_URL:-}
+      SWITCH_API_KEY: ${SWITCH_API_KEY:-}
+      SWITCH_AGENT_ID: ${SWITCH_AGENT_ID:-}
+      SWITCH_WEBHOOK_SECRET: ${SWITCH_WEBHOOK_SECRET:-}
+      ANTIVIRUS_PROVIDER: clamav
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: 3310
+      ANTIVIRUS_FAIL_CLOSED: "true"
+      METRICS_ENABLED: "true"
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:3000}
+    ports:
+      - "${STAGING_API_PORT:-8001}:8000"
+    volumes:
+      - scenesteward-staging-storage:/srv/scenesteward/backend/var/storage
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      clamav:
+        condition: service_healthy
+    networks:
+      - scenesteward-staging-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: scenesteward-staging-worker
+    command: ["python", "scripts/switch_retry.py", "--loop"]
+    environment:
+      APP_ENV: staging
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-scenesteward_staging}:${POSTGRES_PASSWORD:-staging_db_secure_pass_2026}@db:5432/${POSTGRES_DB:-scenesteward_staging}
+      DATABASE_IDENTITY_SECRET: ${DATABASE_IDENTITY_SECRET:-scenesteward_staging_identity_trust_secret_2026}
+      AUTH_PROVIDER: ${AUTH_PROVIDER:-supabase}
+      APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY:-rfbmYlSxk4ofQ0EM8KbeAiGRGQjEoOvbxZV2-WsRZ-k=}
+      SWITCH_ADAPTER: ${SWITCH_ADAPTER:-http}
+      SWITCH_BASE_URL: ${SWITCH_BASE_URL:-}
+      SWITCH_API_KEY: ${SWITCH_API_KEY:-}
+      SWITCH_AGENT_ID: ${SWITCH_AGENT_ID:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    networks:
+      - scenesteward-staging-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os; os.kill(1, 0)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    restart: always
+
+networks:
+  scenesteward-staging-net:
+    driver: bridge
+
+volumes:
+  scenesteward-staging-pgdata:
+  scenesteward-staging-storage:
+  scenesteward-staging-clamav:
+
