@@ -42,10 +42,18 @@ TABLE_NAMES = sorted(Base.metadata.tables)
 
 @pytest.fixture(scope="session", autouse=True)
 def _verify_schema():
+    rounds = ("b3f9c21a7d44",)
     engine = get_engine()
     with engine.connect() as conn:
-        row = conn.execute(text("select version_num from alembic_version")).scalar()
-    assert row == "b3f9c21a7d44", f"test database is not at head (found {row!r}); run alembic upgrade head"
+        try:
+            row = conn.execute(text("select version_num from alembic_version")).scalar()
+        except Exception as exc:
+            raise RuntimeError(
+                "Test database is not migrated. Run: "
+                "ALEMBIC_DATABASE_URL=$DATABASE_URL_TEST alembic -c alembic.ini upgrade head"
+            ) from exc
+    if row not in rounds:
+        raise RuntimeError(f"test database is not at head (found {row!r}); run alembic upgrade head")
 
 
 @pytest.fixture()

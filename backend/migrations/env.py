@@ -12,6 +12,10 @@ from sqlalchemy import engine_from_config, pool
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_ROOT))
 
+# ALEMBIC_DATABASE_URL may point alembic at a scratch/CI database without a .env.
+if os.environ.get("ALEMBIC_DATABASE_URL"):
+    os.environ["DATABASE_URL"] = os.environ["ALEMBIC_DATABASE_URL"]
+
 from app.core.config import get_settings  # noqa: E402
 from app.models import Base  # noqa: E402
 
