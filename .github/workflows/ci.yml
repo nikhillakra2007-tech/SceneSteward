@@ -68,6 +68,7 @@ jobs:
       - name: Run Alembic Migrations to Head
         env:
           ALEMBIC_DATABASE_URL: "postgresql+psycopg://scenesteward:superuser_test_password@localhost:5432/scenesteward_test"
+          DATABASE_IDENTITY_SECRET: "ci_database_identity_secret_2026_test_only"
         run: |
           alembic -c backend/alembic.ini upgrade head
 
@@ -85,6 +86,7 @@ jobs:
 
       - name: Run Pytest Suite (Unit, Matrix, Security & Integration)
         env:
+          DATABASE_URL: "postgresql+psycopg://scenesteward_app:app_test_password@localhost:5432/scenesteward_test"
           DATABASE_URL_ADMIN: "postgresql+psycopg://scenesteward:superuser_test_password@localhost:5432/scenesteward_test"
           DATABASE_URL_TEST: "postgresql+psycopg://scenesteward_app:app_test_password@localhost:5432/scenesteward_test"
           DATABASE_IDENTITY_SECRET: "ci_database_identity_secret_2026_test_only"
@@ -95,6 +97,7 @@ jobs:
 
       - name: Verify 8-Step Documentary Lifecycle
         env:
+          DATABASE_URL: "postgresql+psycopg://scenesteward_app:app_test_password@localhost:5432/scenesteward_test"
           DATABASE_URL_ADMIN: "postgresql+psycopg://scenesteward:superuser_test_password@localhost:5432/scenesteward_test"
           DATABASE_URL_TEST: "postgresql+psycopg://scenesteward_app:app_test_password@localhost:5432/scenesteward_test"
           DATABASE_IDENTITY_SECRET: "ci_database_identity_secret_2026_test_only"
@@ -151,4 +154,4 @@ jobs:
 
       - name: Test Backend Container Build
         run: |
-          docker build -t scenesteward-backend:ci -f backend/Dockerfile backend
+          docker build -t scenesteward-backend:ci -f backend/Dockerfile .

@@ -31,6 +31,17 @@ os.environ.setdefault("AI_PROVIDER", "offline")
 os.environ.setdefault("SWITCH_ADAPTER", "test")
 os.environ.setdefault("STORAGE_PROVIDER", "local")
 
+# Route DATABASE_URL to test database when in test environment or DATABASE_URL_TEST provided
+if "DATABASE_URL_TEST" in os.environ:
+    os.environ["DATABASE_URL"] = os.environ["DATABASE_URL_TEST"]
+else:
+    _env_file = BACKEND_DIR / ".env"
+    if _env_file.exists():
+        for _line in _env_file.read_text(encoding="utf-8").splitlines():
+            if _line.startswith("DATABASE_URL_TEST="):
+                os.environ["DATABASE_URL"] = _line.split("=", 1)[1].strip().strip('"').strip("'")
+                break
+
 from fastapi.testclient import TestClient
 
 from app.core.choices import CONSENT_CATEGORIES
@@ -41,6 +52,29 @@ from app.main import create_app
 
 def run_verification() -> bool:
     settings = get_settings()
+
+    admin_url = os.environ.get("DATABASE_URL_ADMIN")
+    if not admin_url:
+        env_file = BACKEND_DIR / ".env"
+        if env_file.exists():
+            for line in env_file.read_text(encoding="utf-8").splitlines():
+                if line.startswith("DATABASE_URL_ADMIN="):
+                    admin_url = line.split("=", 1)[1].strip().strip('"').strip("'")
+                    break
+
+    if admin_url:
+        from sqlalchemy import create_engine, text
+        admin_eng = create_engine(admin_url)
+        with admin_eng.begin() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO private.app_secrets (key_name, secret_val) "
+                    "VALUES ('identity_secret', :sec) "
+                    "ON CONFLICT (key_name) DO UPDATE SET secret_val = EXCLUDED.secret_val"
+                ),
+                {"sec": settings.database_identity_secret},
+            )
+
     app = create_app()
     client = TestClient(app, raise_server_exceptions=False)
 
