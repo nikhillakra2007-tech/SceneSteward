@@ -85,37 +85,47 @@ def create_app() -> FastAPI:
 
     @app.middleware("http")
     async def rate_limit_middleware(request: Request, call_next):
-        if _rate_check(request, settings.rate_limit_per_minute):
-            return JSONResponse(status_code=429, content={"error": {"code": "rate_limited", "message": "Too many requests"}})
-        return await call_next(request)
+        from app.core.rate_limiter import EXCLUDED_PATHS, get_client_ip, get_rate_limiter
+
+        if request.url.path in EXCLUDED_PATHS or settings.app_env == "test":
+            return await call_next(request)
+
+        limiter = get_rate_limiter(settings.redis_url)
+        client_ip = get_client_ip(request, settings.resolved_trusted_proxies)
+        tier_limit = limiter.get_tier_limit(request.url.path, settings.rate_limit_per_minute)
+
+        result = limiter.check(
+            key=f"{client_ip}:{request.url.path}",
+            limit_per_minute=tier_limit,
+        )
+
+        if result.is_limited:
+            return JSONResponse(
+                status_code=429,
+                content={
+                    "error": {
+                        "code": "rate_limited",
+                        "message": f"Too many requests. Please retry in {result.reset_seconds} seconds.",
+                        "retry_after": result.reset_seconds,
+                    }
+                },
+                headers={
+                    "Retry-After": str(result.reset_seconds),
+                    "X-RateLimit-Limit": str(result.limit),
+                    "X-RateLimit-Remaining": "0",
+                    "X-RateLimit-Reset": str(int(time.time() + result.reset_seconds)),
+                },
+            )
+
+        response = await call_next(request)
+        response.headers["X-RateLimit-Limit"] = str(result.limit)
+        response.headers["X-RateLimit-Remaining"] = str(result.remaining)
+        response.headers["X-RateLimit-Reset"] = str(int(time.time() + result.reset_seconds))
+        return response
 
     app.include_router(health_router)
     app.include_router(api_router, prefix="/api/v1")
     return app
-
-
-# --- simple in-process fixed-window rate limiter (per IP per minute) --------
-import threading
-
-_buckets: dict[tuple[str, int], int] = {}
-_lock = threading.Lock()
-
-
-def _rate_check(request: Request, per_minute: int) -> bool:
-    if request.url.path in ("/health", "/health/ready"):
-        return False
-    if get_settings().app_env == "test":
-        return False
-    host = (request.client.host if request.client else "unknown")
-    window = int(time.time() // 60)
-    with _lock:
-        key = (host, window)
-        _buckets[key] = _buckets.get(key, 0) + 1
-        # opportunistic cleanup of old windows
-        if len(_buckets) > 10000:
-            for k in [k for k in _buckets if k[1] != window]:
-                _buckets.pop(k, None)
-        return _buckets[key] > per_minute
 
 
 app = create_app()
