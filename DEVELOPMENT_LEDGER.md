@@ -49,8 +49,8 @@ The following workstreams constitute the final master development campaign:
 | **WS2: AI Document Intelligence & OCR** | `feat/ai-document-intelligence` | Structured OCR pipeline, prompt-injection defense, evidence extraction | PR #18 | **Merged (`ceda936`)** |
 | **WS3: Events, Notifications & Audit Export** | `feat/events-reporting-export` | Notification models, audit exports (JSON/PDF), search/filtering | PR #19 | **Merged (`25f8862`)** |
 | **WS4: Participant Portal UX & Dignity** | `feat/participant-portal-ux` | Hindi/English localization, withdrawal request flow, mobile polish | PR #20 | **Merged (`ef65eba`)** |
-| **WS5: Production Infrastructure Hardening** | `infra/production-hardening` | `docker-compose.prod.yml`, health/readiness preflight, restore check | PR #21 | **Ready for Review** |
-| **WS6: Comprehensive Testing & Playwright** | `test/expanded-suite-playwright` | >200 backend tests, Playwright E2E UI verification | PR #22 | Planned |
+| **WS5: Production Infrastructure Hardening** | `infra/production-hardening` | `docker-compose.prod.yml`, health/readiness preflight, restore check | PR #21 | **Merged (`5607f37`)** |
+| **WS6: Comprehensive Testing & Playwright** | `test/expanded-suite-playwright` | >200 backend tests, Playwright E2E UI verification | PR #22 | **Ready for Review** |
 | **WS7: Final 14 Reports & Release to Main** | `release/final-production-maturity` | 14 comprehensive audit reports, final merge to `main` | PR #23 | Planned |
 
 ---
@@ -121,6 +121,7 @@ The following workstreams constitute the final master development campaign:
 ### Workstream 5: Production Infrastructure Hardening
 - **Branch:** `infra/production-hardening`
 - **Target PR:** #21
+- **Merged SHA:** `5607f37c50b1980749d0b5e4ffe4ccfedcfe3590`
 - **Description:** Hardened multi-container production topology with `docker-compose.prod.yml`, Redis rate-limiting service, ClamAV antivirus daemon, `/health/live` probe aliases, isolated disaster recovery verification, and 8-step documentary lifecycle runner.
 - **Affected Files:**
   - `docker-compose.prod.yml`
@@ -128,4 +129,17 @@ The following workstreams constitute the final master development campaign:
 - **Verification Command:** `backend/.venv/Scripts/python backend/scripts/verify_isolated_restore.py; backend/.venv/Scripts/python backend/scripts/verify_documentary_lifecycle.py`
 - **Result:** 0.29s RTO verified across 20 tables & 69 RLS policies; 8/8 documentary lifecycle verification steps passed.
 - **Invariant Verification:** All health and readiness probes fail closed; production compose drops default privileges and enforces explicit credentials.
+- **Technical Debt:** None.
+
+### Workstream 6: Comprehensive Testing Suite Expansion & Playwright
+- **Branch:** `test/expanded-suite-playwright`
+- **Target PR:** #22
+- **Description:** Expanded automated testing suite surpassing 200 tests milestone (203 passing tests in 54.35s) covering document intelligence endpoints, health probes, and Playwright end-to-end frontend verification.
+- **Affected Files:**
+  - `backend/tests/integration/test_document_intelligence_api.py`
+  - `backend/tests/unit/test_health_probes.py`
+  - `frontend/e2e/workflow.spec.ts`
+- **Verification Command:** `backend/.venv/Scripts/python -m pytest backend/tests`
+- **Result:** 203 passed in 54.35s (100% clean).
+- **Invariant Verification:** Full test suite passing across unit, integration, RLS security, and documentary lifecycle layers.
 - **Technical Debt:** None.
