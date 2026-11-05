@@ -2,12 +2,17 @@
 logout is client-side token discard (+ provider-specific revocation when applicable)."""
 from __future__ import annotations
 
+import uuid
+
 from fastapi import APIRouter
 from sqlalchemy import select
 
 from app.api.dependencies import CurrentUser, DbSession
-from app.models import Project, ProjectMembership
-from app.schemas.auth import LogoutResponse, MembershipSummary, MeResponse
+from app.core.config import get_settings
+from app.core.exceptions import PermissionDenied
+from app.core.security import mint_dev_token
+from app.models import Project, ProjectMembership, User
+from app.schemas.auth import DevTokenRequest, LogoutResponse, MembershipSummary, MeResponse, TokenResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -43,3 +48,37 @@ def logout(user: CurrentUser) -> LogoutResponse:
     # clients must discard the token. Supabase sessions are revoked client-side
     # via supabase.auth.sign_out().
     return LogoutResponse()
+
+
+@router.post("/dev-token", response_model=TokenResponse)
+def create_dev_token(payload: DevTokenRequest, db: DbSession) -> TokenResponse:
+    settings = get_settings()
+    if settings.auth_provider != "dev":
+        raise PermissionDenied("Dev login endpoint is disabled outside dev auth provider")
+
+    email = str(payload.email).strip().lower()
+    user = db.execute(
+        select(User).where(User.email == email, User.auth_provider == "dev")
+    ).scalar_one_or_none()
+
+    if user is None:
+        user = User(
+            email=email,
+            full_name=payload.name.strip(),
+            auth_provider="dev",
+            provider_user_id=str(uuid.uuid4()),
+            account_status="active",
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+    token = mint_dev_token(
+        user_id=user.provider_user_id,
+        email=user.email,
+        full_name=user.full_name,
+        settings=settings,
+        ttl_seconds=86400,
+    )
+    return TokenResponse(access_token=token, token_type="bearer")
+

@@ -28,3 +28,14 @@ class MembershipSummary(ORMModel):
 
 class LogoutResponse(BaseModel):
     detail: str = Field(default="Client should discard the access token; provider sessions are managed by the auth provider.")
+
+
+class DevTokenRequest(BaseModel):
+    email: EmailStr
+    name: str = "Test User"
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
