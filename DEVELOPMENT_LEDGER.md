@@ -45,8 +45,8 @@ The following workstreams constitute the final master development campaign:
 
 | Workstream | Branch Name | Planned Scope | Target PR | Status |
 |:---|:---|:---|:---:|:---:|
-| **WS1: Master Audit & Ledger** | `docs/master-audit-and-ledger` | `DEVELOPMENT_LEDGER.md`, `docs/FINAL_DEVELOPMENT_AUDIT.md` | PR #17 | **In Progress** |
-| **WS2: AI Document Intelligence & OCR** | `feat/ai-document-intelligence` | Structured OCR pipeline, prompt-injection defense, evidence extraction | PR #18 | Planned |
+| **WS1: Master Audit & Ledger** | `docs/master-audit-and-ledger` | `DEVELOPMENT_LEDGER.md`, `docs/FINAL_DEVELOPMENT_AUDIT.md` | PR #17 | **Merged (`a133469`)** |
+| **WS2: AI Document Intelligence & OCR** | `feat/ai-document-intelligence` | Structured OCR pipeline, prompt-injection defense, evidence extraction | PR #18 | **Ready for Review** |
 | **WS3: Events, Notifications & Audit Export** | `feat/events-reporting-export` | Notification models, audit exports (JSON/PDF), search/filtering | PR #19 | Planned |
 | **WS4: Participant Portal UX & Dignity** | `feat/participant-portal-ux` | Hindi/English localization, withdrawal request flow, mobile polish | PR #20 | Planned |
 | **WS5: Production Infrastructure Hardening** | `infra/production-hardening` | `docker-compose.prod.yml`, health/readiness preflight, restore check | PR #21 | Planned |
@@ -60,6 +60,7 @@ The following workstreams constitute the final master development campaign:
 ### Workstream 1: Master Audit & Ledger
 - **Branch:** `docs/master-audit-and-ledger`
 - **Target PR:** #17
+- **Merged SHA:** `a1334691f8709280db50b1235bde45c51d002e52`
 - **Description:** Initialize persistent development ledger and comprehensive master development audit covering all 14 dimensions of production readiness, architectural integrity, and security invariants.
 - **Affected Files:**
   - `DEVELOPMENT_LEDGER.md`
@@ -69,4 +70,17 @@ The following workstreams constitute the final master development campaign:
 - **Invariant Verification:** Full adherence to canonical 15 consent categories, non-transitive consent rule, and advisory AI boundary.
 - **Technical Debt:** None.
 
-*(Subsequent workstreams will be recorded upon completion).*
+### Workstream 2: AI Document Intelligence & OCR Pipeline
+- **Branch:** `feat/ai-document-intelligence`
+- **Target PR:** #18
+- **Description:** Advanced document intelligence service with prompt-injection defense, control character stripping, structured clause and stated exclusion detection with exact line/page references across 15 canonical categories, confidence scoring, and advisory notices.
+- **Affected Files:**
+  - `backend/app/services/document_intelligence.py`
+  - `backend/app/services/extraction.py`
+  - `backend/app/schemas/documents.py`
+  - `backend/app/api/v1/endpoints/documents.py`
+  - `backend/tests/unit/test_document_intelligence.py`
+- **Verification Command:** `backend/.venv/Scripts/python -m pytest backend/tests`
+- **Result:** 196 passed in 53.95s (100% clean).
+- **Invariant Verification:** Non-transitive consent mapping strictly preserved; all AI extraction remains advisory with mandatory human confirmation.
+- **Technical Debt:** None.
