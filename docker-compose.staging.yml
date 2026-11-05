@@ -1,5 +1,5 @@
 # SceneSteward — Staging Docker Compose Stack
-# Isolated staging environment with dedicated database, ClamAV daemon, migration runner, API, and worker.
+# Isolated staging environment with dedicated database, ClamAV daemon, Redis, migration runner, API, worker, and frontend.
 # All sensitive credentials must be supplied via environment variables (e.g., from backend/.env.staging).
 services:
   db:
@@ -20,6 +20,22 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+
+  redis:
+    image: redis:7-alpine
+    container_name: scenesteward-staging-redis
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-staging_redis_secret}"]
+    ports:
+      - "127.0.0.1:${STAGING_REDIS_PORT:-6380}:6379"
+    volumes:
+      - scenesteward-staging-redis:/data
+    networks:
+      - scenesteward-staging-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-staging_redis_secret}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   clamav:
     image: clamav/clamav:1.4
@@ -67,6 +83,7 @@ services:
       APP_ENV: staging
       DATABASE_URL: postgresql+psycopg://${APP_USER:-scenesteward_app}:${APP_PASSWORD}@db:5432/${POSTGRES_DB:-scenesteward_staging}
       DATABASE_IDENTITY_SECRET: ${DATABASE_IDENTITY_SECRET}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-staging_redis_secret}@redis:6379/0
       AUTH_PROVIDER: ${AUTH_PROVIDER:-supabase}
       SUPABASE_URL: ${SUPABASE_URL:-}
       SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
@@ -92,13 +109,15 @@ services:
       CLAMAV_PORT: 3310
       ANTIVIRUS_FAIL_CLOSED: "true"
       METRICS_ENABLED: "true"
-      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:3000}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:3001}
     ports:
       - "${STAGING_API_PORT:-8001}:8000"
     volumes:
       - scenesteward-staging-storage:/srv/scenesteward/backend/var/storage
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
@@ -144,6 +163,31 @@ services:
       start_period: 10s
     restart: always
 
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8001}
+    container_name: scenesteward-staging-frontend
+    ports:
+      - "${STAGING_FRONTEND_PORT:-3001}:3000"
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8001}
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - scenesteward-staging-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
 networks:
   scenesteward-staging-net:
     driver: bridge
@@ -152,3 +196,4 @@ volumes:
   scenesteward-staging-pgdata:
   scenesteward-staging-storage:
   scenesteward-staging-clamav:
+  scenesteward-staging-redis:
