@@ -74,11 +74,12 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     container_name: scenesteward-prod-migrate
-    command: ["alembic", "-c", "alembic.ini", "upgrade", "head"]
+    command: ["python", "scripts/run_migrations.py"]
     environment:
       APP_ENV: production
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-scenesteward_prod}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-scenesteward_prod}
       MIGRATION_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-scenesteward_prod}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-scenesteward_prod}
+      APP_PASSWORD: ${APP_PASSWORD}
       DATABASE_IDENTITY_SECRET: ${DATABASE_IDENTITY_SECRET}
       AUTH_PROVIDER: ${AUTH_PROVIDER:-supabase}
       APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY}
@@ -97,7 +98,7 @@ services:
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--proxy-headers"]
     environment:
       APP_ENV: production
-      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-scenesteward_prod}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-scenesteward_prod}
+      DATABASE_URL: postgresql+psycopg://${APP_USER:-scenesteward_app}:${APP_PASSWORD}@db:5432/${POSTGRES_DB:-scenesteward_prod}
       DATABASE_IDENTITY_SECRET: ${DATABASE_IDENTITY_SECRET}
       AUTH_PROVIDER: ${AUTH_PROVIDER:-supabase}
       SUPABASE_URL: ${SUPABASE_URL:-}
@@ -162,7 +163,7 @@ services:
     command: ["python", "scripts/switch_retry.py", "--loop"]
     environment:
       APP_ENV: production
-      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-scenesteward_prod}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-scenesteward_prod}
+      DATABASE_URL: postgresql+psycopg://${APP_USER:-scenesteward_app}:${APP_PASSWORD}@db:5432/${POSTGRES_DB:-scenesteward_prod}
       DATABASE_IDENTITY_SECRET: ${DATABASE_IDENTITY_SECRET}
       AUTH_PROVIDER: ${AUTH_PROVIDER:-supabase}
       APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY}
@@ -178,11 +179,11 @@ services:
     networks:
       - scenesteward-prod-net
     healthcheck:
-      test: ["CMD", "python", "-c", "import os; os.kill(1, 0)"]
+      test: ["CMD", "python", "scripts/switch_retry.py", "--check-health"]
       interval: 15s
       timeout: 5s
       retries: 3
-      start_period: 5s
+      start_period: 10s
 
 networks:
   scenesteward-prod-net:

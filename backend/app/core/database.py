@@ -202,7 +202,12 @@ def check_database(engine: Engine | None = None) -> dict[str, Any]:
                 migration_head = str(res) if res else None
             except Exception:  # noqa: BLE001
                 migration_head = None
-        return {"status": "ok", "migration_head": migration_head}
+            current_user = None
+            try:
+                current_user = conn.execute(text("SELECT current_user")).scalar()
+            except Exception:  # noqa: BLE001
+                current_user = None
+        return {"status": "ok", "migration_head": migration_head, "current_user": current_user}
     except Exception as exc:  # noqa: BLE001 — health must never raise or leak internals
         return {"status": "unavailable", "error_category": type(exc).__name__}
 
@@ -250,3 +255,42 @@ def verify_database_trust(engine: Engine | None = None) -> dict[str, Any]:
                 }
     except Exception as exc:  # noqa: BLE001
         return {"status": "error", "ok": False, "detail": str(exc)[:200]}
+
+
+def verify_runtime_role_identity(engine: Engine | None = None) -> dict[str, Any]:
+    """Verify that runtime connection is running as an unprivileged role (NOBYPASSRLS, NOSUPERUSER)."""
+    eng = engine or get_engine()
+    try:
+        with eng.connect() as conn:
+            row = conn.execute(text("""
+                SELECT current_user, session_user, current_database(),
+                       r.rolsuper, r.rolcreatedb, r.rolcreaterole, r.rolbypassrls
+                FROM pg_roles r
+                WHERE r.rolname = current_user
+            """)).mappings().first()
+            if not row:
+                return {"ok": False, "detail": "Could not inspect role attributes for current_user"}
+            is_privileged = bool(row["rolsuper"] or row["rolcreatedb"] or row["rolcreaterole"] or row["rolbypassrls"])
+            return {
+                "ok": not is_privileged,
+                "current_user": row["current_user"],
+                "session_user": row["session_user"],
+                "database": row["current_database"],
+                "rolsuper": bool(row["rolsuper"]),
+                "rolbypassrls": bool(row["rolbypassrls"]),
+                "rolcreatedb": bool(row["rolcreatedb"]),
+                "rolcreaterole": bool(row["rolcreaterole"]),
+                "detail": "Runtime role is unprivileged" if not is_privileged else "Privileged role detected (superuser/bypassrls)",
+            }
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "ok": False,
+            "detail": str(exc)[:200],
+            "current_user": None,
+            "session_user": None,
+            "database": None,
+            "rolsuper": False,
+            "rolbypassrls": False,
+            "rolcreatedb": False,
+            "rolcreaterole": False,
+        }

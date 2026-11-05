@@ -29,7 +29,7 @@ async def lifespan(app: FastAPI):
             logger.warning("startup configuration issue: %s -> %s", check["check"], check["status"])
 
     # Active database trust boundary verification
-    from app.core.database import verify_database_trust
+    from app.core.database import verify_database_trust, verify_runtime_role_identity
     trust = verify_database_trust()
     if not trust.get("ok"):
         logger.error("Database trust verification failed: %s", trust.get("detail"))
@@ -37,6 +37,16 @@ async def lifespan(app: FastAPI):
             raise RuntimeError(
                 f"FATAL DATABASE TRUST FAILURE: {trust.get('detail')} "
                 "(Application secret does not match PostgreSQL RLS trust boundary)"
+            )
+
+    # Active database runtime role least-privilege verification
+    if settings.is_production or settings.is_staging:
+        role_check = verify_runtime_role_identity()
+        if not role_check.get("ok"):
+            logger.error("Database runtime role verification failed: %s", role_check.get("detail"))
+            raise RuntimeError(
+                f"FATAL DATABASE ROLE VIOLATION: {role_check.get('detail')} "
+                f"(current_user={role_check.get('current_user')}, superuser={role_check.get('rolsuper')}, bypassrls={role_check.get('rolbypassrls')})"
             )
     yield
 
