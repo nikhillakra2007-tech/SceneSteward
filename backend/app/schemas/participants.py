@@ -103,6 +103,7 @@ class ClarificationRequestIn(BaseModel):
     concern: str = Field(min_length=3, max_length=5000)
     category: str | None = None
     contact_method: str | None = None
+    request_type: str = Field(default="clarification", description="Type of request: clarification or withdrawal")
 
 
 class ClarificationRequestOut(BaseModel):

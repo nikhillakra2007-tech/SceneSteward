@@ -108,3 +108,31 @@ class MemberUpdate(BaseModel):
         if v is not None and v not in MEMBERSHIP_STATUSES:
             raise ValueError(f"membership_status must be one of {MEMBERSHIP_STATUSES}")
         return v
+
+
+class NotificationOut(BaseModel):
+    id: uuid.UUID
+    project_id: uuid.UUID
+    notification_type: str
+    title: str
+    message: str
+    priority: str
+    entity_type: str
+    entity_id: uuid.UUID | None
+    created_at: datetime
+
+
+class ProjectAuditExportOut(BaseModel):
+    project_id: uuid.UUID
+    project_title: str
+    purpose: str | None
+    generated_at: datetime
+    total_participants: int
+    participant_summary: dict[str, int]
+    consent_overview: dict[str, dict[str, int]]
+    pending_tasks_count: int
+    urgent_tasks_count: int
+    audit_events_count: int
+    compliance_status: str
+    invariants_verified: list[str]
+    integrity_hash: str

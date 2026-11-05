@@ -82,9 +82,15 @@ def create_participant(project_id: uuid.UUID, payload: ParticipantCreate,
 
 @router.get("/projects/{project_id}/participants", response_model=Page[ParticipantOut])
 def list_participants(project_id: uuid.UUID, db: DbSession, user: CurrentUser,
-                      page: Annotated[PageParams, Depends(page_params)]) -> Page[ParticipantOut]:
+                      page: Annotated[PageParams, Depends(page_params)],
+                      search: str | None = None,
+                      status: str | None = None) -> Page[ParticipantOut]:
     membership = get_membership(db, project_id, user)
     stmt = select(Participant).where(Participant.project_id == project_id)
+    if search:
+        stmt = stmt.where(Participant.display_name.ilike(f"%{search.strip()}%"))
+    if status:
+        stmt = stmt.where(Participant.participant_status == status)
     if membership.role == permissions.PARTICIPANT:
         # Linked participants see only their own record.
         stmt = stmt.where(Participant.user_id == user.id)
@@ -315,11 +321,15 @@ def submit_clarification_request(
         if participant is None:
             raise NotFoundError("Participant not found")
 
-        # Create care task
-        title = f"Clarification Request: {participant.display_name}"
+        is_withdrawal = (payload.request_type == "withdrawal") or ("withdraw" in payload.concern.lower())
+        task_priority = "urgent" if is_withdrawal else "high"
+        title_prefix = "WITHDRAWAL NOTICE" if is_withdrawal else "Clarification Request"
+        title = f"{title_prefix}: {participant.display_name}"
         description = f"Participant submitted concern: {payload.concern}"
         if payload.category:
             description += f"\nCategory: {payload.category}"
+        if is_withdrawal:
+            description += "\nURGENT: Participant has requested consent withdrawal. Immediately pause associated footage edits."
 
         task = Task(
             project_id=participant.project_id,
@@ -328,28 +338,45 @@ def submit_clarification_request(
             title=title,
             description=description,
             status="open",
-            priority="high",
+            priority=task_priority,
             created_by_actor_type="system",
         )
         db.add(task)
         db.flush()
 
+        action_name = "participant.withdrawal_requested" if is_withdrawal else "participant.clarification_requested"
         audit.record(
             db,
             project_id=participant.project_id,
             participant_id=participant.id,
             actor_type="system",
             actor_id=actor_desc,
-            action="participant.clarification_requested",
+            action=action_name,
             entity_type="task",
             entity_id=task.id,
-            new_value={"concern": payload.concern, "category": payload.category},
+            new_value={"concern": payload.concern, "category": payload.category, "is_withdrawal": is_withdrawal},
         )
         db.commit()
+
+        from app.events import publish
+        topic = "participant.withdrawal_requested" if is_withdrawal else "participant.clarification_requested"
+        publish(
+            topic,
+            project_id=str(participant.project_id),
+            participant_id=str(participant.id),
+            task_id=str(task.id),
+            priority=task_priority,
+        )
+
+        resp_msg = (
+            "Your withdrawal notice has been recorded. The production team has been notified to pause use immediately."
+            if is_withdrawal
+            else "Your clarification request has been securely submitted to the Participant Care team."
+        )
         return ClarificationRequestOut(
             participant_id=participant.id,
             task_id=task.id,
             status="received",
-            message="Your clarification request has been securely submitted to the Participant Care team.",
+            message=resp_msg,
         )
 

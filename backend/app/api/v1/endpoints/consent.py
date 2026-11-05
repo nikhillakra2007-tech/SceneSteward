@@ -74,6 +74,7 @@ def list_consent_records(
     user: OptionalUser,
     page: Annotated[PageParams, Depends(page_params)],
     token: str | None = None,
+    status: str | None = None,
 ) -> Page[ConsentRecordOut]:
     if token:
         claims = decode_participant_token(token)
@@ -84,6 +85,8 @@ def list_consent_records(
             if participant is None or str(participant.project_id) != claims.get("project_id"):
                 raise NotFoundError("Participant not found")
             stmt = select(ConsentRecord).where(ConsentRecord.participant_id == participant.id)
+            if status:
+                stmt = stmt.where(ConsentRecord.record_status == status)
             total = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
             rows = db.execute(
                 stmt.order_by(ConsentRecord.version_number.desc())
@@ -96,6 +99,8 @@ def list_consent_records(
 
     participant, _membership = _get_participant_scoped(db, participant_id, user, None, "view consent")
     stmt = select(ConsentRecord).where(ConsentRecord.participant_id == participant.id)
+    if status:
+        stmt = stmt.where(ConsentRecord.record_status == status)
     total = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
     rows = db.execute(stmt.order_by(ConsentRecord.version_number.desc())
                       .limit(page.limit).offset(page.offset)).scalars().all()
