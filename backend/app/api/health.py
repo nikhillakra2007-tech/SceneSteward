@@ -41,10 +41,19 @@ def readiness(response: Response) -> dict[str, Any]:
     # 1. Database Check (Critical)
     db_result = check_database()
     if db_result.get("status") == "ok":
-        checks["database"] = {
-            "status": "ok",
-            "migration_head": db_result.get("migration_head"),
-        }
+        migration_head = db_result.get("migration_head")
+        if settings.app_env == "production" and not migration_head:
+            is_healthy = False
+            checks["database"] = {
+                "status": "unmigrated",
+                "error": "database missing migration version",
+            }
+        else:
+            checks["database"] = {
+                "status": "ok",
+                "migration_head": migration_head,
+                "current_user": db_result.get("current_user"),
+            }
     else:
         is_healthy = False
         checks["database"] = {
@@ -61,11 +70,17 @@ def readiness(response: Response) -> dict[str, Any]:
                 limiter.redis_client.ping()
                 checks["redis"] = {"status": "ok"}
             else:
-                is_degraded = True
                 checks["redis"] = {"status": "error", "fallback": "in_memory"}
+                if settings.app_env == "production":
+                    is_healthy = False
+                else:
+                    is_degraded = True
         except Exception:  # noqa: BLE001
-            is_degraded = True
             checks["redis"] = {"status": "error", "fallback": "in_memory"}
+            if settings.app_env == "production":
+                is_healthy = False
+            else:
+                is_degraded = True
     else:
         checks["redis"] = {"status": "disabled"}
 
