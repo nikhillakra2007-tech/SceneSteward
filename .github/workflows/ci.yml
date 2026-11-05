@@ -152,6 +152,7 @@ jobs:
       - name: Validate Staging Docker Compose Configuration
         env:
           APP_ENV: staging
+          POSTGRES_PASSWORD: test_ci_db_password_1234567890
           DATABASE_PASSWORD: test_ci_db_password_1234567890
           APP_PASSWORD: test_ci_app_password_1234567890
           APP_ENCRYPTION_KEY: "67yRWp6G4NQfdYCVyaajG5JspDXj6h8qHmly0wKpDkM="
@@ -159,6 +160,16 @@ jobs:
           AUTH_DEV_SECRET: "test_ci_auth_secret_1234567890_ci_abcdef"
         run: |
           docker compose -f docker-compose.staging.yml config
+
+      - name: Validate Production Docker Compose Configuration
+        env:
+          APP_ENV: production
+          POSTGRES_PASSWORD: test_ci_prod_db_password_1234567890
+          APP_ENCRYPTION_KEY: "67yRWp6G4NQfdYCVyaajG5JspDXj6h8qHmly0wKpDkM="
+          DATABASE_IDENTITY_SECRET: "test_ci_prod_trust_secret_1234567890_ci"
+          REDIS_PASSWORD: "test_ci_redis_password_1234567890"
+        run: |
+          docker compose -f docker-compose.prod.yml config
 
       - name: Test Backend Container Build
         run: |

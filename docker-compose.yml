@@ -3,7 +3,7 @@
 # Dev defaults only; override POSTGRES_PASSWORD / DATABASE_URL for any shared environment.
 services:
   db:
-    image: postgres:18-alpine
+    image: postgres:16-alpine
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-scenesteward}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-scenesteward}

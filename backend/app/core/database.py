@@ -191,12 +191,18 @@ def get_db() -> Generator[Session, None, None]:
         session.close()
 
 
-def check_database(engine: Engine | None = None) -> dict[str, str]:
+def check_database(engine: Engine | None = None) -> dict[str, Any]:
     eng = engine or get_engine()
     try:
         with eng.connect() as conn:
             conn.execute(text("SELECT 1"))
-        return {"status": "ok"}
+            migration_head = None
+            try:
+                res = conn.execute(text("SELECT version_num FROM alembic_version LIMIT 1")).scalar()
+                migration_head = str(res) if res else None
+            except Exception:  # noqa: BLE001
+                migration_head = None
+        return {"status": "ok", "migration_head": migration_head}
     except Exception as exc:  # noqa: BLE001 — health must never raise or leak internals
         return {"status": "unavailable", "error_category": type(exc).__name__}
 
