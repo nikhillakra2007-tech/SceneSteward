@@ -15,13 +15,16 @@ import pytest
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_ROOT))
 
+# Force APP_ENV to 'test' if unset in test harness
+os.environ.setdefault("APP_ENV", "test")
+
 # Force the test databases BEFORE any app import; pydantic-settings prefers env vars over .env.
-_orig_env = os.environ.get("APP_ENV", "").lower()
-if _orig_env in {"production", "staging"}:
-    raise RuntimeError(
-        f"CRITICAL SECURITY GUARD: Refusing to execute test suite in APP_ENV={_orig_env!r}! "
-        "Test fixtures execute destructive operations (TRUNCATE) and must never target staging or production."
-    )
+from app.core.lifecycle_guards import (
+    ensure_safe_destructive_environment,
+    validate_test_database_url,
+)
+
+ensure_safe_destructive_environment(operation_name="test suite initialization")
 
 _test_url = os.environ.get("DATABASE_URL_TEST")
 _admin_url = os.environ.get("DATABASE_URL_ADMIN")
@@ -45,19 +48,8 @@ if _test_url is None or _admin_url is None:
     )
 
 # Strict URL & Target Environment Guards
-for _label, _check_url in [("DATABASE_URL_TEST", _test_url), ("DATABASE_URL_ADMIN", _admin_url)]:
-    _db_part = _check_url.rsplit("/", 1)[-1].split("?")[0]
-    if not _db_part.endswith("_test"):
-        raise RuntimeError(
-            f"CRITICAL SECURITY GUARD: Refusing to execute tests! {_label} target database {_db_part!r} "
-            "does not end with '_test'. Tests must target a dedicated disposable test database."
-        )
-    _lower_url = _check_url.lower()
-    for _forbidden_host in [".rds.amazonaws.com", ".supabase.co", ".database.windows.net", "cockroachlabs.cloud"]:
-        if _forbidden_host in _lower_url:
-            raise RuntimeError(
-                f"CRITICAL SECURITY GUARD: Refusing to execute tests against cloud database host {_forbidden_host!r}!"
-            )
+validate_test_database_url(_test_url, "DATABASE_URL_TEST")
+validate_test_database_url(_admin_url, "DATABASE_URL_ADMIN")
 
 os.environ["DATABASE_URL"] = _test_url
 os.environ["MIGRATION_DATABASE_URL"] = _admin_url
@@ -89,6 +81,13 @@ _admin_engine = create_engine(
     connect_args={"options": "-c idle_in_transaction_session_timeout=10000"},
 )
 _AdminSession = sessionmaker(bind=_admin_engine, autoflush=False, expire_on_commit=False, future=True)
+
+_test_engine = create_engine(
+    _test_url,
+    pool_size=2,
+    future=True,
+    connect_args={"options": "-c idle_in_transaction_session_timeout=10000"},
+)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -125,6 +124,29 @@ def _verify_schema():
             ),
             {"sec": settings.database_identity_secret},
         )
+
+    # Independently verify runtime engine (scenesteward_app) boundaries and handshake
+    with _test_engine.connect() as test_conn:
+        test_db = test_conn.execute(text("SELECT current_database()")).scalar()
+        if str(test_db) != str(active_db):
+            raise RuntimeError(f"Database mismatch between admin ({active_db}) and runtime ({test_db}) engines!")
+        user_role = test_conn.execute(text("SELECT current_user")).scalar()
+        if user_role != "scenesteward_app":
+            raise RuntimeError(f"DATABASE_URL_TEST must connect as scenesteward_app (found {user_role!r})")
+        try:
+            has_sel = test_conn.execute(
+                text("SELECT has_table_privilege('scenesteward_app', 'private.app_secrets', 'select')")
+            ).scalar()
+            if has_sel:
+                raise RuntimeError("CRITICAL PRIVILEGE LEAK: scenesteward_app has SELECT on private.app_secrets!")
+        except Exception as exc:
+            if "permission denied" not in str(exc).lower():
+                raise
+
+    from app.core.database import verify_database_trust
+    trust = verify_database_trust(_test_engine)
+    if not trust.get("ok"):
+        raise RuntimeError(f"Test database trust handshake failed: {trust.get('detail')}")
 
 
 @pytest.fixture()

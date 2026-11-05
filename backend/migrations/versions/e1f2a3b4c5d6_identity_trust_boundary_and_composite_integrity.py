@@ -19,42 +19,119 @@ def upgrade() -> None:
     # 1. Private schema and secret store for RLS identity verification
     # -------------------------------------------------------------------------
     import os
+
+    from sqlalchemy import text
+
     app_env = os.environ.get("APP_ENV", "development").lower()
     identity_secret = os.environ.get("DATABASE_IDENTITY_SECRET")
+    allow_rotation = os.environ.get("ROTATE_IDENTITY_SECRET", "").lower() in ("true", "1", "yes")
 
-    # In production, require an explicitly configured, non-placeholder identity secret
-    if app_env == "production":
-        if not identity_secret or identity_secret in (
-            "CHANGE_ME", "CHANGE_ME_GENERATE_WITH_OPENSSL_RAND_HEX_32",
-            "scenesteward_db_trust_secret_2026_prod_v1", "scenesteward_staging_identity_trust_secret_2026"
-        ) or "CHANGE_ME" in identity_secret:
+    KNOWN_INSECURE_PLACEHOLDERS = frozenset({
+        "CHANGE_ME",
+        "CHANGE_ME_GENERATE_WITH_OPENSSL_RAND_HEX_32",
+        "scenesteward_db_trust_secret_2026_prod_v1",
+        "scenesteward_staging_identity_trust_secret_2026",
+    })
+
+    is_restricted_env = app_env in ("production", "staging")
+
+    # In production and staging, require an explicitly configured, non-placeholder identity secret (min 32 chars)
+    if is_restricted_env:
+        if (
+            not identity_secret
+            or identity_secret in KNOWN_INSECURE_PLACEHOLDERS
+            or "CHANGE_ME" in identity_secret
+            or len(identity_secret) < 32
+        ):
             raise RuntimeError(
-                "CRITICAL SECURITY CONFIGURATION ERROR: DATABASE_IDENTITY_SECRET must be an explicitly "
-                "generated, high-entropy secret when applying migrations in production! "
-                "Fallbacks and placeholder defaults are strictly prohibited in production."
+                f"CRITICAL SECURITY CONFIGURATION ERROR: DATABASE_IDENTITY_SECRET must be an explicitly "
+                f"generated, high-entropy secret (min 32 chars) when applying migrations in {app_env}! "
+                "Fallbacks and placeholder defaults are strictly prohibited."
             )
     elif not identity_secret:
-        # Development fallback only
+        # Development / test fallback only
         identity_secret = "scenesteward_db_trust_secret_2026_prod_v1"
 
-    op.execute(f"""
+    op.execute("""
         CREATE SCHEMA IF NOT EXISTS private;
         CREATE TABLE IF NOT EXISTS private.app_secrets (
             key_name text PRIMARY KEY,
             secret_val text NOT NULL
         );
-        INSERT INTO private.app_secrets (key_name, secret_val)
-        VALUES ('identity_secret', '{identity_secret}')
-        ON CONFLICT (key_name) DO NOTHING;
-
         REVOKE ALL ON SCHEMA private FROM public, scenesteward_app, scenesteward_readonly;
         REVOKE ALL ON ALL TABLES IN SCHEMA private FROM public, scenesteward_app, scenesteward_readonly;
     """)
+
+    bind = op.get_bind()
+    existing_secret = bind.execute(
+        text("SELECT secret_val FROM private.app_secrets WHERE key_name = 'identity_secret'")
+    ).scalar()
+
+    if existing_secret is None:
+        # Scenario A: Fresh installation
+        bind.execute(
+            text("INSERT INTO private.app_secrets (key_name, secret_val) VALUES ('identity_secret', :sec)"),
+            {"sec": identity_secret},
+        )
+    else:
+        # Database already contains an active secret
+        # Check Scenario C: Existing secret in DB is an insecure placeholder in production/staging
+        if is_restricted_env and (
+            existing_secret in KNOWN_INSECURE_PLACEHOLDERS or "CHANGE_ME" in existing_secret
+        ):
+            if not allow_rotation:
+                raise RuntimeError(
+                    f"CRITICAL SECURITY ERROR: Database contains an insecure placeholder identity secret in {app_env}! "
+                    "You must provide an explicitly configured high-entropy DATABASE_IDENTITY_SECRET and set "
+                    "ROTATE_IDENTITY_SECRET=true to authorize updating the database secret."
+                )
+            bind.execute(
+                text("UPDATE private.app_secrets SET secret_val = :sec WHERE key_name = 'identity_secret'"),
+                {"sec": identity_secret},
+            )
+        elif identity_secret != existing_secret:
+            # Scenario B & E: Mismatch between environment and database
+            if allow_rotation:
+                # Scenario E: Explicitly authorized secret rotation
+                bind.execute(
+                    text("UPDATE private.app_secrets SET secret_val = :sec WHERE key_name = 'identity_secret'"),
+                    {"sec": identity_secret},
+                )
+            else:
+                # Scenario B: Unintentional mismatch — reject to prevent silent breakage!
+                raise RuntimeError(
+                    "CRITICAL DATABASE TRUST MISMATCH: The configured DATABASE_IDENTITY_SECRET in the environment "
+                    "does not match the active secret in private.app_secrets! "
+                    "Running with mismatched secrets will cause all Row-Level Security queries to fail silently. "
+                    "If this is an intentional secret rotation, deploy with ROTATE_IDENTITY_SECRET=true. "
+                    "Otherwise, restore the matching DATABASE_IDENTITY_SECRET to match the database."
+                )
 
     # -------------------------------------------------------------------------
     # 2. Cryptographically verified RLS identity and system context functions
     # -------------------------------------------------------------------------
     op.execute("""
+        CREATE OR REPLACE FUNCTION public.app_verify_trust_handshake(p_nonce text, p_sig text) RETURNS boolean
+        LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public, pg_catalog, pg_temp AS $$
+        DECLARE
+            v_secret text;
+        BEGIN
+            IF p_nonce IS NULL OR p_sig IS NULL THEN
+                RETURN FALSE;
+            END IF;
+            SELECT secret_val INTO v_secret FROM private.app_secrets WHERE key_name = 'identity_secret';
+            IF v_secret IS NULL THEN
+                RETURN FALSE;
+            END IF;
+            RETURN (p_sig = encode(sha256((p_nonce || ':' || v_secret)::bytea), 'hex'));
+        EXCEPTION WHEN OTHERS THEN
+            RETURN FALSE;
+        END;
+        $$;
+
+        REVOKE ALL ON FUNCTION public.app_verify_trust_handshake(text, text) FROM PUBLIC;
+        GRANT EXECUTE ON FUNCTION public.app_verify_trust_handshake(text, text) TO scenesteward_app, scenesteward;
+
         CREATE OR REPLACE FUNCTION public.app_current_user_id() RETURNS uuid
         LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public, pg_catalog, pg_temp AS $$
         DECLARE
@@ -250,7 +327,13 @@ def downgrade() -> None:
                   AND p.user_id = NULLIF(current_setting('app.user_id', true), '')::uuid)
         $$;
 
-        DROP FUNCTION IF EXISTS public.app_current_user_id();
+        DROP POLICY IF EXISTS p_projects_select ON public.projects;
+        CREATE POLICY p_projects_select ON public.projects
+            FOR SELECT TO scenesteward_app
+            USING (app_is_system() OR app_is_member(id) OR created_by = NULLIF(current_setting('app.user_id', true), '')::uuid);
+
+        DROP FUNCTION IF EXISTS public.app_verify_trust_handshake(text, text);
+        DROP FUNCTION IF EXISTS public.app_current_user_id() CASCADE;
 
         DROP TABLE IF EXISTS private.app_secrets CASCADE;
         DROP SCHEMA IF EXISTS private CASCADE;

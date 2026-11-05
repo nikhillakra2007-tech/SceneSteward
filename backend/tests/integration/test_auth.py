@@ -144,6 +144,7 @@ def test_supabase_jwks_offline_verification(monkeypatch):
         auth_audience="authenticated",
         database_url="postgresql+psycopg://u:p@127.0.0.1:5432/db",
         app_encryption_key="T_kDLwS1SAGcgyw6ZCdioTJFcVd9ysp9_Lvobogn8nI=",
+        database_identity_secret="staging_secure_test_secret_32_chars_long",
     )
 
     now = int(time.time())

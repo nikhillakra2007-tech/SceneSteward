@@ -27,7 +27,12 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger("scenesteward.restore")
 
 
-def run_restore(backup_file: Path, target_db: str | None = None, db_url: str | None = None) -> None:
+def run_restore(
+    backup_file: Path,
+    target_db: str | None = None,
+    db_url: str | None = None,
+    confirm_destructive_override: str | None = None,
+) -> None:
     if not backup_file.is_file():
         logger.error("Backup file not found: %s", backup_file)
         sys.exit(1)
@@ -53,6 +58,16 @@ def run_restore(backup_file: Path, target_db: str | None = None, db_url: str | N
     parsed = urlparse(clean_url)
 
     dest_db = target_db or parsed.path.lstrip("/") or "scenesteward"
+
+    from app.core.lifecycle_guards import ensure_safe_destructive_environment
+    ensure_safe_destructive_environment(
+        settings=settings,
+        operation_name=f"database restore (--clean) into target {dest_db!r}",
+        target_database=dest_db,
+        allow_explicit_override=bool(confirm_destructive_override),
+        override_token=confirm_destructive_override,
+    )
+
     logger.info("Restoring %s into target database %r...", backup_file.name, dest_db)
 
     env = os.environ.copy()
@@ -97,9 +112,15 @@ def main() -> None:
     parser.add_argument("--backup-file", type=Path, required=True, help="Path to .dump file.")
     parser.add_argument("--target-db", type=str, default=None, help="Target database name.")
     parser.add_argument("--db-url", type=str, default=None, help="Database connection URL.")
+    parser.add_argument("--confirm-destructive-override", type=str, default=None, help="Required token for production/staging restore (e.g. CONFIRM_DESTRUCTIVE_OVERRIDE_STAGING).")
     args = parser.parse_args()
 
-    run_restore(backup_file=args.backup_file, target_db=args.target_db, db_url=args.db_url)
+    run_restore(
+        backup_file=args.backup_file,
+        target_db=args.target_db,
+        db_url=args.db_url,
+        confirm_destructive_override=args.confirm_destructive_override,
+    )
 
 
 if __name__ == "__main__":
