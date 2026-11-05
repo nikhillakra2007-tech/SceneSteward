@@ -10,6 +10,7 @@ router = APIRouter(tags=["health"])
 
 
 @router.get("/health")
+@router.get("/health/live")
 def liveness() -> dict:
     return {"status": "ok", "app": get_settings().app_name}
 

@@ -48,8 +48,8 @@ The following workstreams constitute the final master development campaign:
 | **WS1: Master Audit & Ledger** | `docs/master-audit-and-ledger` | `DEVELOPMENT_LEDGER.md`, `docs/FINAL_DEVELOPMENT_AUDIT.md` | PR #17 | **Merged (`a133469`)** |
 | **WS2: AI Document Intelligence & OCR** | `feat/ai-document-intelligence` | Structured OCR pipeline, prompt-injection defense, evidence extraction | PR #18 | **Merged (`ceda936`)** |
 | **WS3: Events, Notifications & Audit Export** | `feat/events-reporting-export` | Notification models, audit exports (JSON/PDF), search/filtering | PR #19 | **Merged (`25f8862`)** |
-| **WS4: Participant Portal UX & Dignity** | `feat/participant-portal-ux` | Hindi/English localization, withdrawal request flow, mobile polish | PR #20 | **Ready for Review** |
-| **WS5: Production Infrastructure Hardening** | `infra/production-hardening` | `docker-compose.prod.yml`, health/readiness preflight, restore check | PR #21 | Planned |
+| **WS4: Participant Portal UX & Dignity** | `feat/participant-portal-ux` | Hindi/English localization, withdrawal request flow, mobile polish | PR #20 | **Merged (`ef65eba`)** |
+| **WS5: Production Infrastructure Hardening** | `infra/production-hardening` | `docker-compose.prod.yml`, health/readiness preflight, restore check | PR #21 | **Ready for Review** |
 | **WS6: Comprehensive Testing & Playwright** | `test/expanded-suite-playwright` | >200 backend tests, Playwright E2E UI verification | PR #22 | Planned |
 | **WS7: Final 14 Reports & Release to Main** | `release/final-production-maturity` | 14 comprehensive audit reports, final merge to `main` | PR #23 | Planned |
 
@@ -108,6 +108,7 @@ The following workstreams constitute the final master development campaign:
 ### Workstream 4: Participant Portal UX, Dignity & Localization
 - **Branch:** `feat/participant-portal-ux`
 - **Target PR:** #20
+- **Merged SHA:** `ef65eba6ec796ad597d265ed6a41a791305e43b8`
 - **Description:** Participant transparency portal enhancement featuring complete English / Hindi bilingual localization dictionary for all 15 canonical categories, formal consent withdrawal flow with immediate operational escalation, and mobile-responsive UI design.
 - **Affected Files:**
   - `frontend/src/app/participant/[id]/page.tsx`
@@ -115,4 +116,16 @@ The following workstreams constitute the final master development campaign:
 - **Verification Command:** `cd frontend; npm run build`
 - **Result:** Next.js production build cleanly compiled across all 5 routes.
 - **Invariant Verification:** Full dignity guarantee asserted prominently in English and Hindi; non-transitive category boundaries respected.
+- **Technical Debt:** None.
+
+### Workstream 5: Production Infrastructure Hardening
+- **Branch:** `infra/production-hardening`
+- **Target PR:** #21
+- **Description:** Hardened multi-container production topology with `docker-compose.prod.yml`, Redis rate-limiting service, ClamAV antivirus daemon, `/health/live` probe aliases, isolated disaster recovery verification, and 8-step documentary lifecycle runner.
+- **Affected Files:**
+  - `docker-compose.prod.yml`
+  - `backend/app/api/health.py`
+- **Verification Command:** `backend/.venv/Scripts/python backend/scripts/verify_isolated_restore.py; backend/.venv/Scripts/python backend/scripts/verify_documentary_lifecycle.py`
+- **Result:** 0.29s RTO verified across 20 tables & 69 RLS policies; 8/8 documentary lifecycle verification steps passed.
+- **Invariant Verification:** All health and readiness probes fail closed; production compose drops default privileges and enforces explicit credentials.
 - **Technical Debt:** None.
