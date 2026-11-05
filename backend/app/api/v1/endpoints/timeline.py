@@ -5,9 +5,11 @@ import uuid
 
 from fastapi import APIRouter, Query
 
-from app.api.dependencies import CurrentUser, DbSession, get_membership
+from app.api.dependencies import CurrentUser, DbSession, OptionalUser, get_membership
 from app.core import permissions
-from app.core.exceptions import NotFoundError, PermissionDenied
+from app.core.database import system_context
+from app.core.exceptions import NotFoundError, PermissionDenied, Unauthenticated
+from app.core.security import decode_participant_token
 from app.models import Participant
 from app.schemas.timeline import TimelineEntry
 from app.services.timeline import DEFAULT_LIMIT, MAX_LIMIT, timeline_query
@@ -43,9 +45,35 @@ def project_timeline(project_id: uuid.UUID, db: DbSession, user: CurrentUser,
 
 
 @router.get("/participants/{participant_id}/timeline")
-def participant_timeline(participant_id: uuid.UUID, db: DbSession, user: CurrentUser,
-                         limit: int = Query(default=DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
-                         cursor: str | None = Query(default=None)) -> dict:
+def participant_timeline(
+    participant_id: uuid.UUID,
+    db: DbSession,
+    user: OptionalUser,
+    limit: int = Query(default=DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
+    cursor: str | None = Query(default=None),
+    token: str | None = None,
+) -> dict:
+    if token:
+        claims = decode_participant_token(token)
+        if claims.get("sub") != str(participant_id):
+            raise PermissionDenied("Access token does not match this participant")
+        with system_context(db):
+            participant = db.get(Participant, participant_id)
+            if participant is None or str(participant.project_id) != claims.get("project_id"):
+                raise NotFoundError("Participant not found")
+            rows, next_cursor = timeline_query(
+                db,
+                project_id=participant.project_id,
+                participant_id=participant.id,
+                viewer_role=permissions.PARTICIPANT,
+                limit=limit,
+                cursor=cursor,
+            )
+            return _entries(rows, next_cursor)
+
+    if user is None:
+        raise Unauthenticated("Authentication or participant token required")
+
     participant = db.get(Participant, participant_id)
     if participant is None:
         raise NotFoundError("Participant not found")

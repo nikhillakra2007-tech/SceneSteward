@@ -8,9 +8,11 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 
-from app.api.dependencies import CurrentUser, DbSession, get_membership
+from app.api.dependencies import CurrentUser, DbSession, OptionalUser, get_membership
 from app.core import permissions
-from app.core.exceptions import NotFoundError, PermissionDenied
+from app.core.database import system_context
+from app.core.exceptions import NotFoundError, PermissionDenied, Unauthenticated
+from app.core.security import decode_participant_token
 from app.models import ConsentRecord, Participant
 from app.schemas.common import Page
 from app.schemas.consent import (
@@ -65,8 +67,33 @@ def create_consent_record(participant_id: uuid.UUID, payload: ConsentRecordCreat
 
 
 @router.get("/participants/{participant_id}/consent-records", response_model=Page[ConsentRecordOut])
-def list_consent_records(participant_id: uuid.UUID, db: DbSession, user: CurrentUser,
-                         page: Annotated[PageParams, Depends(page_params)]) -> Page[ConsentRecordOut]:
+@router.get("/participants/{participant_id}/consents", response_model=Page[ConsentRecordOut])
+def list_consent_records(
+    participant_id: uuid.UUID,
+    db: DbSession,
+    user: OptionalUser,
+    page: Annotated[PageParams, Depends(page_params)],
+    token: str | None = None,
+) -> Page[ConsentRecordOut]:
+    if token:
+        claims = decode_participant_token(token)
+        if claims.get("sub") != str(participant_id):
+            raise PermissionDenied("Access token does not match this participant")
+        with system_context(db):
+            participant = db.get(Participant, participant_id)
+            if participant is None or str(participant.project_id) != claims.get("project_id"):
+                raise NotFoundError("Participant not found")
+            stmt = select(ConsentRecord).where(ConsentRecord.participant_id == participant.id)
+            total = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
+            rows = db.execute(
+                stmt.order_by(ConsentRecord.version_number.desc())
+                .limit(page.limit).offset(page.offset)
+            ).scalars().all()
+            return Page(items=[_out(r) for r in rows], total=total, limit=page.limit, offset=page.offset)
+
+    if user is None:
+        raise Unauthenticated("Authentication or participant token required")
+
     participant, _membership = _get_participant_scoped(db, participant_id, user, None, "view consent")
     stmt = select(ConsentRecord).where(ConsentRecord.participant_id == participant.id)
     total = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()

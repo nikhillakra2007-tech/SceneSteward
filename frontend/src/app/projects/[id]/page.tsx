@@ -34,27 +34,10 @@ import {
   ReleaseDocument, 
   Communication, 
   TimelineEntry,
+  CANONICAL_CATEGORIES,
   getAuthToken 
 } from '@/lib/api';
 import { ChoiceBadge, OutcomeBadge } from '@/components/ConsentBadge';
-
-const CANONICAL_CATEGORIES = [
-  'interview_inclusion',
-  'name_attribution',
-  'likeness_display',
-  'voice_recording',
-  'sensitive_topics',
-  'historical_footage',
-  'personal_photos',
-  'location_disclosure',
-  'family_mention',
-  'dramatization',
-  'voice_cloning',
-  'promotional_trailers',
-  'social_media_clips',
-  'international_broadcast',
-  'future_syndication'
-];
 
 export default function ProjectWorkspacePage() {
   const params = useParams();
@@ -84,28 +67,37 @@ export default function ProjectWorkspacePage() {
   const [consentSourceType, setConsentSourceType] = useState('release_form');
   const [consentExplanation, setConsentExplanation] = useState('Production standard release agreement');
   const [consentChoices, setConsentChoices] = useState<Record<string, string>>({
-    interview_inclusion: 'agreed',
-    name_attribution: 'agreed',
-    likeness_display: 'agreed',
-    voice_recording: 'agreed',
-    sensitive_topics: 'not_discussed',
-    historical_footage: 'agreed',
-    personal_photos: 'agreed',
-    location_disclosure: 'not_discussed',
-    family_mention: 'not_discussed',
-    dramatization: 'declined',
+    interview_recording: 'agreed',
+    documentary_appearance: 'agreed',
+    name_identification: 'agreed',
+    face_identification: 'agreed',
+    sensitive_personal_details: 'not_discussed',
+    promotional_clips: 'needs_clarification',
+    festival_submissions: 'agreed',
+    ai_transcription: 'agreed',
     voice_cloning: 'declined',
-    promotional_trailers: 'needs_clarification',
-    social_media_clips: 'agreed',
-    international_broadcast: 'agreed',
-    future_syndication: 'not_discussed'
+    synthetic_likeness: 'declined',
+    third_party_ai_processing: 'declined',
+    new_audience: 'not_discussed',
+    new_territory: 'not_discussed',
+    new_platform: 'not_discussed',
+    new_story_context: 'not_discussed',
   });
 
   const [showAddProposedUse, setShowAddProposedUse] = useState(false);
   const [usePartId, setUsePartId] = useState('');
-  const [useType, setUseType] = useState('promotional_trailers');
+  const [useType, setUseType] = useState('promotional_clips');
   const [usePlatform, setUsePlatform] = useState('Theatrical & Digital');
   const [useDesc, setUseDesc] = useState('Promotional trailer featuring interview snippet with dynamic background score');
+
+  // Document upload state
+  const [showUploadDoc, setShowUploadDoc] = useState(false);
+  const [docPartId, setDocPartId] = useState('');
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
+
+  // Participant portal token notification state
+  const [portalNotice, setPortalNotice] = useState<string | null>(null);
 
   const [selectedUseFindings, setSelectedUseFindings] = useState<any[] | null>(null);
   const [selectedUseAnalysis, setSelectedUseAnalysis] = useState<any | null>(null);
@@ -190,10 +182,10 @@ export default function ProjectWorkspacePage() {
     e.preventDefault();
     if (!consentPartId) return;
     try {
-      const choicesPayload: Record<string, { choice: string }> = {};
-      Object.entries(consentChoices).forEach(([cat, val]) => {
-        choicesPayload[cat] = { choice: val };
-      });
+      const choicesPayload = Object.entries(consentChoices).map(([cat, val]) => ({
+        category: cat,
+        choice: val as any,
+      }));
 
       await api.createConsentRecord(consentPartId, {
         source_type: consentSourceType,
@@ -249,7 +241,7 @@ export default function ProjectWorkspacePage() {
 
   const handleRecordReviewDecision = async (
     review: Review,
-    decision: 'approved' | 'approved_with_conditions' | 'rejected'
+    decision: 'approve' | 'decline' | 'request_changes' | 'needs_participant_discussion'
   ) => {
     if (!decisionReason.trim()) {
       alert('A human decision reason is mandatory for ethical accountability.');
@@ -271,15 +263,67 @@ export default function ProjectWorkspacePage() {
 
   const handleApproveCommunication = async (comm: Communication) => {
     try {
-      await api.approveCommunication(comm.id, comm.version);
+      await api.approveCommunication(comm.id, 'Approved by production staff');
       await loadWorkspace();
     } catch (err: any) {
       alert(`Approval failed: ${err.message}`);
     }
   };
 
+  const handleGeneratePortalToken = async (participantId: string) => {
+    try {
+      const res = await api.issueParticipantToken(participantId);
+      const url = `${window.location.origin}/participant/${participantId}?token=${res.token}`;
+      setPortalNotice(`Signed Portal URL: ${url}`);
+      try {
+        await navigator.clipboard.writeText(url);
+      } catch {
+        // clipboard access might be unavailable
+      }
+    } catch (err: any) {
+      alert(`Failed to generate portal link: ${err.message}`);
+    }
+  };
+
+  const handleUploadDocument = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!uploadFile || !docPartId) return;
+    setUploadingDoc(true);
+    try {
+      const target = await api.createUploadUrl(docPartId, {
+        original_filename: uploadFile.name,
+        mime_type: uploadFile.type || 'application/pdf',
+        file_size: uploadFile.size,
+      });
+
+      await fetch(target.upload_url, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': uploadFile.type || 'application/pdf',
+        },
+        body: uploadFile,
+      });
+
+      await api.completeUpload(docPartId, {
+        storage_key: target.storage_key,
+        original_filename: uploadFile.name,
+        mime_type: uploadFile.type || 'application/pdf',
+        file_size: uploadFile.size,
+        title: uploadFile.name,
+      });
+
+      setShowUploadDoc(false);
+      setUploadFile(null);
+      await loadWorkspace();
+    } catch (err: any) {
+      alert(`Upload failed: ${err.message}`);
+    } finally {
+      setUploadingDoc(false);
+    }
+  };
+
   const handleTaskStatusToggle = async (task: Task) => {
-    const nextStatus = task.status === 'completed' ? 'in_progress' : 'completed';
+    const nextStatus = task.status === 'completed' || task.status === 'done' ? 'in_progress' : 'done';
     try {
       await api.updateTask(task.id, { status: nextStatus });
       await loadWorkspace();
@@ -464,6 +508,13 @@ export default function ProjectWorkspacePage() {
             </button>
           </div>
 
+          {portalNotice && (
+            <div className="p-3 rounded-lg bg-indigo-950/80 border border-indigo-700 text-indigo-200 text-xs flex items-center justify-between">
+              <span className="truncate pr-2 font-mono">{portalNotice}</span>
+              <button onClick={() => setPortalNotice(null)} className="text-indigo-400 hover:text-white font-bold ml-2">✕</button>
+            </div>
+          )}
+
           {participants.length === 0 ? (
             <div className="p-8 text-center rounded-xl border border-dashed border-slate-800 text-slate-500 text-xs">
               No participants registered yet. Add a participant to begin tracking releases.
@@ -488,10 +539,18 @@ export default function ProjectWorkspacePage() {
                       <td className="p-3.5 text-slate-300">{pt.preferred_contact_method}</td>
                       <td className="p-3.5">
                         <span className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 text-[10px] font-mono">
-                          {pt.status}
+                          {pt.participant_status || pt.status}
                         </span>
                       </td>
-                      <td className="p-3.5 text-right space-x-2">
+                      <td className="p-3.5 text-right space-x-3">
+                        <button
+                          type="button"
+                          onClick={() => handleGeneratePortalToken(pt.id)}
+                          className="inline-flex items-center space-x-1 text-indigo-400 hover:text-indigo-300 font-semibold text-xs"
+                          title="Generate signed participant portal access link"
+                        >
+                          <span>Issue Portal Link</span>
+                        </button>
                         <Link
                           href={`/participant/${pt.id}`}
                           className="inline-flex items-center space-x-1 text-emerald-400 hover:underline font-semibold"
@@ -542,12 +601,12 @@ export default function ProjectWorkspacePage() {
                         <span className="text-xs text-slate-400">Participant:</span>{' '}
                         <span className="font-bold text-slate-100">{pt ? pt.display_name : c.participant_id}</span>
                         <span className="ml-3 px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 text-[10px] font-mono">
-                          Source: {c.source_type} (v{c.version})
+                          Source: {c.source_type} (v{c.version_number || c.version})
                         </span>
                       </div>
                       <div className="flex items-center space-x-2">
                         <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800 text-[11px] font-mono">
-                          {c.status}
+                          {c.record_status || c.status}
                         </span>
                         <span className="text-xs text-slate-500">
                           {new Date(c.created_at).toLocaleDateString()}
@@ -567,8 +626,14 @@ export default function ProjectWorkspacePage() {
                       </div>
                       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 text-xs">
                         {CANONICAL_CATEGORIES.map((cat) => {
-                          const choiceData = c.choices?.[cat];
-                          const choiceVal = typeof choiceData === 'object' && choiceData ? choiceData.choice : (choiceData || 'not_discussed');
+                          let choiceVal = 'not_discussed';
+                          if (Array.isArray(c.choices)) {
+                            const found = c.choices.find((ch: any) => ch.category === cat);
+                            if (found) choiceVal = found.choice;
+                          } else if (c.choices && typeof c.choices === 'object') {
+                            const choiceData = c.choices[cat];
+                            choiceVal = typeof choiceData === 'object' && choiceData ? choiceData.choice : (choiceData || 'not_discussed');
+                          }
                           return (
                             <div key={cat} className="p-2 rounded bg-slate-950/60 border border-slate-800 flex flex-col justify-between space-y-1">
                               <span className="text-[10px] text-slate-400 truncate" title={cat}>
@@ -596,6 +661,17 @@ export default function ProjectWorkspacePage() {
               <h2 className="text-base font-bold text-white">Release Documents</h2>
               <p className="text-xs text-slate-400">Scanned agreements checked with ClamAV antivirus and encrypted at rest.</p>
             </div>
+            <button
+              onClick={() => {
+                if (participants.length > 0 && !docPartId) setDocPartId(participants[0].id);
+                setShowUploadDoc(true);
+              }}
+              disabled={participants.length === 0}
+              className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold disabled:opacity-50"
+            >
+              <Upload className="h-3.5 w-3.5" />
+              <span>Upload Document</span>
+            </button>
           </div>
 
           {documents.length === 0 ? (
@@ -617,7 +693,7 @@ export default function ProjectWorkspacePage() {
                 <tbody className="divide-y divide-slate-800/80">
                   {documents.map((doc) => (
                     <tr key={doc.id} className="hover:bg-slate-800/30 transition">
-                      <td className="p-3.5 font-medium text-slate-200">{doc.file_name}</td>
+                      <td className="p-3.5 font-medium text-slate-200">{doc.original_filename || doc.file_name}</td>
                       <td className="p-3.5 text-slate-400 font-mono text-[11px]">{doc.mime_type}</td>
                       <td className="p-3.5">
                         <span className={`px-2 py-0.5 rounded text-[10px] font-mono ${
@@ -799,9 +875,9 @@ export default function ProjectWorkspacePage() {
                     </div>
                     {rev.human_decision && (
                       <span className={`text-xs px-2.5 py-0.5 rounded-full font-semibold ${
-                        rev.human_decision === 'approved'
+                        rev.human_decision === 'approve' || rev.human_decision === 'approved'
                           ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
-                          : rev.human_decision === 'rejected'
+                          : rev.human_decision === 'decline' || rev.human_decision === 'rejected'
                           ? 'bg-rose-950 text-rose-400 border border-rose-800'
                           : 'bg-amber-950 text-amber-400 border border-amber-800'
                       }`}>
@@ -839,22 +915,28 @@ export default function ProjectWorkspacePage() {
                               Cancel
                             </button>
                             <button
-                              onClick={() => handleRecordReviewDecision(rev, 'approved')}
+                              onClick={() => handleRecordReviewDecision(rev, 'approve')}
                               className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold"
                             >
                               Approve
                             </button>
                             <button
-                              onClick={() => handleRecordReviewDecision(rev, 'approved_with_conditions')}
+                              onClick={() => handleRecordReviewDecision(rev, 'request_changes')}
                               className="px-3 py-1.5 rounded bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold"
                             >
-                              Approve w/ Conditions
+                              Request Changes
                             </button>
                             <button
-                              onClick={() => handleRecordReviewDecision(rev, 'rejected')}
+                              onClick={() => handleRecordReviewDecision(rev, 'decline')}
                               className="px-3 py-1.5 rounded bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold"
                             >
                               Decline Use
+                            </button>
+                            <button
+                              onClick={() => handleRecordReviewDecision(rev, 'needs_participant_discussion')}
+                              className="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold"
+                            >
+                              Needs Discussion
                             </button>
                           </div>
                         </div>
@@ -901,15 +983,15 @@ export default function ProjectWorkspacePage() {
                     <button
                       onClick={() => handleTaskStatusToggle(task)}
                       className={`h-5 w-5 rounded border flex items-center justify-center transition ${
-                        task.status === 'completed'
+                        task.status === 'completed' || task.status === 'done'
                           ? 'bg-emerald-600 border-emerald-500 text-white'
                           : 'border-slate-600 hover:border-emerald-400'
                       }`}
                     >
-                      {task.status === 'completed' && <CheckCircle2 className="h-3.5 w-3.5" />}
+                      {(task.status === 'completed' || task.status === 'done') && <CheckCircle2 className="h-3.5 w-3.5" />}
                     </button>
                     <div>
-                      <div className={`text-xs font-semibold ${task.status === 'completed' ? 'line-through text-slate-500' : 'text-slate-100'}`}>
+                      <div className={`text-xs font-semibold ${task.status === 'completed' || task.status === 'done' ? 'line-through text-slate-500' : 'text-slate-100'}`}>
                         {task.title}
                       </div>
                       {task.description && (
@@ -947,42 +1029,48 @@ export default function ProjectWorkspacePage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {comms.map((c) => (
-                <div key={c.id} className="p-5 rounded-xl border border-slate-800 bg-slate-900/50 space-y-3">
-                  <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
-                    <div>
-                      <span className="font-bold text-slate-200 text-xs">{c.subject}</span>
-                      <span className="ml-2 px-2 py-0.5 rounded bg-slate-800 text-slate-400 text-[10px] font-mono">
-                        Channel: {c.channel}
+              {comms.map((c) => {
+                const commStatus = c.communication_status || c.status || 'draft';
+                const commType = c.communication_type || c.channel || 'email';
+                const commContent = c.draft_content || c.body || '';
+
+                return (
+                  <div key={c.id} className="p-5 rounded-xl border border-slate-800 bg-slate-900/50 space-y-3">
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                      <div>
+                        <span className="font-bold text-slate-200 text-xs">{c.subject}</span>
+                        <span className="ml-2 px-2 py-0.5 rounded bg-slate-800 text-slate-400 text-[10px] font-mono">
+                          Channel: {commType}
+                        </span>
+                      </div>
+                      <span className={`text-[11px] px-2.5 py-0.5 rounded-full font-mono ${
+                        commStatus === 'sent'
+                          ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
+                          : commStatus === 'approved'
+                          ? 'bg-blue-950 text-blue-400 border border-blue-800'
+                          : 'bg-amber-950 text-amber-400 border border-amber-800'
+                      }`}>
+                        {commStatus}
                       </span>
                     </div>
-                    <span className={`text-[11px] px-2.5 py-0.5 rounded-full font-mono ${
-                      c.status === 'sent'
-                        ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
-                        : c.status === 'approved'
-                        ? 'bg-blue-950 text-blue-400 border border-blue-800'
-                        : 'bg-amber-950 text-amber-400 border border-amber-800'
-                    }`}>
-                      {c.status}
-                    </span>
+
+                    <p className="text-xs text-slate-300 whitespace-pre-wrap bg-slate-950/70 p-3 rounded border border-slate-800 font-mono text-[11px]">
+                      {commContent}
+                    </p>
+
+                    {commStatus === 'draft' && (
+                      <div className="flex justify-end pt-1">
+                        <button
+                          onClick={() => handleApproveCommunication(c)}
+                          className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition"
+                        >
+                          Approve &amp; Authorize Message
+                        </button>
+                      </div>
+                    )}
                   </div>
-
-                  <p className="text-xs text-slate-300 whitespace-pre-wrap bg-slate-950/70 p-3 rounded border border-slate-800 font-mono text-[11px]">
-                    {c.body}
-                  </p>
-
-                  {c.status === 'draft' && (
-                    <div className="flex justify-end pt-1">
-                      <button
-                        onClick={() => handleApproveCommunication(c)}
-                        className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition"
-                      >
-                        Approve &amp; Authorize Message
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -1255,6 +1343,63 @@ export default function ProjectWorkspacePage() {
                   className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold"
                 >
                   Submit &amp; Run Comparison Engine
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Upload Release Document */}
+      {showUploadDoc && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-base font-bold text-white flex items-center space-x-2">
+                <Upload className="h-5 w-5 text-emerald-400" />
+                <span>Upload Release Agreement</span>
+              </h3>
+              <button onClick={() => setShowUploadDoc(false)} className="text-slate-400 hover:text-white">✕</button>
+            </div>
+            <form onSubmit={handleUploadDocument} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Participant *</label>
+                <select
+                  value={docPartId}
+                  onChange={(e) => setDocPartId(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-white text-xs focus:outline-none focus:border-emerald-500"
+                >
+                  {participants.map((pt) => (
+                    <option key={pt.id} value={pt.id}>{pt.display_name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Select Document (PDF, PNG, JPG) *</label>
+                <input
+                  type="file"
+                  required
+                  accept=".pdf,.png,.jpg,.jpeg,.docx"
+                  onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                  className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-slate-300 text-xs focus:outline-none focus:border-emerald-500 file:mr-3 file:py-1 file:px-2.5 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-slate-200 hover:file:bg-slate-700"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setShowUploadDoc(false)}
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 text-xs font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!uploadFile || !docPartId || uploadingDoc}
+                  className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold disabled:opacity-50"
+                >
+                  {uploadingDoc ? 'Uploading & Scanning...' : 'Upload & Scan'}
                 </button>
               </div>
             </form>

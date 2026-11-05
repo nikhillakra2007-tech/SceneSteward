@@ -58,6 +58,21 @@ def get_current_user(
 CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
+def get_optional_user(
+    db: DbSession,
+    authorization: Annotated[str | None, Header()] = None,
+) -> User | None:
+    if not authorization or not authorization.lower().startswith("bearer "):
+        return None
+    try:
+        return get_current_user(db, authorization)
+    except (Unauthenticated, PermissionDenied):
+        return None
+
+
+OptionalUser = Annotated[User | None, Depends(get_optional_user)]
+
+
 def get_membership(db: Session, project_id: uuid.UUID, user: User) -> ProjectMembership:
     stmt = select(ProjectMembership).where(
         ProjectMembership.project_id == project_id,
