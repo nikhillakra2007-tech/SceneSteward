@@ -84,12 +84,45 @@ class Settings(BaseSettings):
     rate_limit_per_minute: int = 120
     max_request_bytes: int = 1048576
 
+    redis_url: str | None = None
+    trusted_proxies: str = "127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+
     @model_validator(mode="after")
     def _production_guard(self) -> Settings:
-        if (self.is_production or self.is_staging) and self.auth_provider == "dev":
+        is_live = self.is_production or self.is_staging
+        if is_live and self.auth_provider == "dev":
             raise ValueError(f"AUTH_PROVIDER=dev is not permitted in APP_ENV={self.app_env}; configure Supabase or another real IdP")
-        if (self.is_production or self.is_staging) and not self.app_encryption_key:
-            raise ValueError(f"APP_ENCRYPTION_KEY must be set in APP_ENV={self.app_env}")
+        if is_live:
+            if not self.app_encryption_key:
+                raise ValueError(f"APP_ENCRYPTION_KEY must be set in APP_ENV={self.app_env}")
+            if "GENERATE" in self.app_encryption_key or "CHANGE_ME" in self.app_encryption_key:
+                raise ValueError(f"APP_ENCRYPTION_KEY contains a placeholder in APP_ENV={self.app_env}")
+            try:
+                from cryptography.fernet import Fernet
+                Fernet(self.app_encryption_key.encode("utf-8") if isinstance(self.app_encryption_key, str) else self.app_encryption_key)
+            except Exception as e:
+                raise ValueError(f"APP_ENCRYPTION_KEY is invalid for Fernet 256-bit AES-CBC: {e}") from e
+
+            # Check database identity secret
+            if self.is_production and (
+                not self.database_identity_secret
+                or self.database_identity_secret in (
+                    "CHANGE_ME", "CHANGE_ME_GENERATE_WITH_OPENSSL_RAND_HEX_32",
+                    "scenesteward_db_trust_secret_2026_prod_v1", "scenesteward_staging_identity_trust_secret_2026",
+                )
+                or "CHANGE_ME" in self.database_identity_secret
+            ):
+                raise ValueError("DATABASE_IDENTITY_SECRET must be an explicitly generated secret in production (default/placeholder is forbidden)")
+
+            # Check database credentials
+            low_db = self.database_url.lower()
+            if self.is_production and any(p in low_db for p in (":app_password@", ":changeme@", ":postgres@", ":staging_db_secure_pass_2026@")):
+                raise ValueError("DATABASE_URL contains a default/example password in production")
+
+            # Check ClamAV fail-closed in production
+            if self.is_production and self.antivirus_provider == "clamav" and not self.antivirus_fail_closed:
+                raise ValueError("ANTIVIRUS_FAIL_CLOSED must be True in production when ANTIVIRUS_PROVIDER=clamav")
+
         return self
 
     @field_validator("app_env")
@@ -157,6 +190,10 @@ class Settings(BaseSettings):
     @property
     def frontend_origins(self) -> list[str]:
         return [o.strip() for o in self.frontend_origin.split(",") if o.strip()]
+
+    @property
+    def resolved_trusted_proxies(self) -> list[str]:
+        return [p.strip() for p in self.trusted_proxies.split(",") if p.strip()]
 
     @property
     def resolved_encryption_key_ring(self) -> dict[str, str]:

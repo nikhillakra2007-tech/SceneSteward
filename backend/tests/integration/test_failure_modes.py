@@ -68,7 +68,8 @@ def test_clamav_unavailable_fail_closed():
         clamav_host="127.0.0.1",
         clamav_port=9999,  # nothing listening on 9999
         antivirus_fail_closed=True,
-        database_url="postgresql+psycopg://u:p@127.0.0.1:5432/db",
+        database_url="postgresql+psycopg://u:secure_test_password@127.0.0.1:5432/db",
+        database_identity_secret="prod_identity_secret_valid_for_testing",
         app_encryption_key="T_kDLwS1SAGcgyw6ZCdioTJFcVd9ysp9_Lvobogn8nI=",
     )
     result = scan_bytes(b"Clean test document bytes", settings=settings)
