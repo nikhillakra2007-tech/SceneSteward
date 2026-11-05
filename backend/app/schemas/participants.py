@@ -89,6 +89,14 @@ class ParticipantTokenResponse(BaseModel):
     access_token: str
     portal_path: str
     expires_in_seconds: int
+    token: str | None = None
+    expires_in: int | None = None
+
+    def model_post_init(self, context: object, /) -> None:
+        if self.token is None:
+            self.token = self.access_token
+        if self.expires_in is None:
+            self.expires_in = self.expires_in_seconds
 
 
 class ClarificationRequestIn(BaseModel):
