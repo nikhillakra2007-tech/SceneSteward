@@ -53,8 +53,11 @@ from app.main import create_app
 def run_verification() -> bool:
     settings = get_settings()
 
-    if settings.is_production:
-        raise RuntimeError("CRITICAL GUARD: Refusing to execute documentary lifecycle verification against production!")
+    from app.core.lifecycle_guards import ensure_safe_destructive_environment
+    ensure_safe_destructive_environment(
+        settings=settings,
+        operation_name="documentary lifecycle verification",
+    )
 
     admin_url = os.environ.get("DATABASE_URL_ADMIN")
     if not admin_url:
@@ -70,11 +73,11 @@ def run_verification() -> bool:
         admin_eng = create_engine(admin_url)
         with admin_eng.begin() as conn:
             active_db = conn.execute(text("SELECT current_database()")).scalar()
-            if not active_db or not str(active_db).endswith("_test"):
-                raise RuntimeError(
-                    f"CRITICAL GUARD: Target database {active_db!r} is not a test database! "
-                    "Refusing to modify trust secret."
-                )
+            ensure_safe_destructive_environment(
+                settings=settings,
+                operation_name="documentary lifecycle verification",
+                target_database=str(active_db) if active_db else None,
+            )
             conn.execute(
                 text(
                     "INSERT INTO private.app_secrets (key_name, secret_val) "

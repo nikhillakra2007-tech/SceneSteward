@@ -92,6 +92,7 @@ jobs:
 
       - name: Run Pytest Suite (Unit, Matrix, Security & Integration)
         env:
+          APP_ENV: "test"
           DATABASE_URL: "postgresql+psycopg://scenesteward_app:app_test_password@localhost:5432/scenesteward_test"
           DATABASE_URL_ADMIN: "postgresql+psycopg://scenesteward:superuser_test_password@localhost:5432/scenesteward_test"
           DATABASE_URL_TEST: "postgresql+psycopg://scenesteward_app:app_test_password@localhost:5432/scenesteward_test"
@@ -103,6 +104,7 @@ jobs:
 
       - name: Verify 8-Step Documentary Lifecycle
         env:
+          APP_ENV: "test"
           DATABASE_URL: "postgresql+psycopg://scenesteward_app:app_test_password@localhost:5432/scenesteward_test"
           DATABASE_URL_ADMIN: "postgresql+psycopg://scenesteward:superuser_test_password@localhost:5432/scenesteward_test"
           DATABASE_URL_TEST: "postgresql+psycopg://scenesteward_app:app_test_password@localhost:5432/scenesteward_test"

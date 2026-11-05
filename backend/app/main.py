@@ -27,6 +27,17 @@ async def lifespan(app: FastAPI):
         logger.info("startup check", extra={"integration": check["check"]})
         if check["status"] not in ("configured",):
             logger.warning("startup configuration issue: %s -> %s", check["check"], check["status"])
+
+    # Active database trust boundary verification
+    from app.core.database import verify_database_trust
+    trust = verify_database_trust()
+    if not trust.get("ok"):
+        logger.error("Database trust verification failed: %s", trust.get("detail"))
+        if settings.is_production or settings.is_staging:
+            raise RuntimeError(
+                f"FATAL DATABASE TRUST FAILURE: {trust.get('detail')} "
+                "(Application secret does not match PostgreSQL RLS trust boundary)"
+            )
     yield
 
 

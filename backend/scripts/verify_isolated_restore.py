@@ -32,6 +32,12 @@ ADMIN_URL = "postgresql://postgres:postgres@127.0.0.1:5432/postgres"
 
 
 def main() -> None:
+    from app.core.lifecycle_guards import ensure_safe_destructive_environment
+    ensure_safe_destructive_environment(
+        operation_name="isolated disaster recovery verification",
+        target_database=DISPOSABLE_DB,
+    )
+
     # 1. Prepare disposable database
     logger.info("Step 1: Provisioning isolated disposable database: %s", DISPOSABLE_DB)
     with psycopg.connect(ADMIN_URL, autocommit=True) as conn:

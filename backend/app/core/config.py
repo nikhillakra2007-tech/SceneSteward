@@ -104,20 +104,23 @@ class Settings(BaseSettings):
                 raise ValueError(f"APP_ENCRYPTION_KEY is invalid for Fernet 256-bit AES-CBC: {e}") from e
 
             # Check database identity secret
-            if self.is_production and (
+            if (self.is_production or self.is_staging) and (
                 not self.database_identity_secret
                 or self.database_identity_secret in (
                     "CHANGE_ME", "CHANGE_ME_GENERATE_WITH_OPENSSL_RAND_HEX_32",
                     "scenesteward_db_trust_secret_2026_prod_v1", "scenesteward_staging_identity_trust_secret_2026",
                 )
                 or "CHANGE_ME" in self.database_identity_secret
+                or len(self.database_identity_secret) < 32
             ):
-                raise ValueError("DATABASE_IDENTITY_SECRET must be an explicitly generated secret in production (default/placeholder is forbidden)")
+                raise ValueError(
+                    f"DATABASE_IDENTITY_SECRET must be an explicitly generated secret (min 32 chars, high-entropy) in {self.app_env} (default/placeholder is forbidden)"
+                )
 
             # Check database credentials
             low_db = self.database_url.lower()
-            if self.is_production and any(p in low_db for p in (":app_password@", ":changeme@", ":postgres@", ":staging_db_secure_pass_2026@")):
-                raise ValueError("DATABASE_URL contains a default/example password in production")
+            if (self.is_production or self.is_staging) and any(p in low_db for p in (":app_password@", ":changeme@", ":postgres@", ":staging_db_secure_pass_2026@")):
+                raise ValueError(f"DATABASE_URL contains a default/example password in {self.app_env}")
 
             # Check ClamAV fail-closed in production
             if self.is_production and self.antivirus_provider == "clamav" and not self.antivirus_fail_closed:

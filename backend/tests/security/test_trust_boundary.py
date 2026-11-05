@@ -301,3 +301,72 @@ def test_connection_pool_context_leakage_prevented(two_projects):
         current_uid = conn2.execute(text("SELECT public.app_current_user_id()")).scalar()
         assert current_uid is None, "Subsequent connection without context must evaluate app_current_user_id() to NULL"
 
+
+def test_connection_pool_failed_transaction_isolation(two_projects):
+    """Proves that failed/errored transactions in a connection pool do not leak context when recycled."""
+    settings = get_settings()
+    app_engine = create_engine(settings.database_url, pool_size=1, max_overflow=0, future=True)
+    user_a = two_projects["user_a"]
+    sig_a = compute_identity_sig(str(user_a.id))
+
+    # Connection 1: set user context and simulate an error / unhandled exception
+    try:
+        with app_engine.begin() as conn1:
+            conn1.execute(
+                text("SELECT set_config('app.user_id', :uid, true), set_config('app.user_sig', :sig, true)"),
+                {"uid": str(user_a.id), "sig": sig_a},
+            )
+            # Intentionally trigger a database error
+            conn1.execute(text("SELECT 1/0"))
+    except Exception:  # noqa: BLE001, S110
+        pass
+
+    # Connection 2: checked out from the single-connection pool after rollback/error
+    with app_engine.begin() as conn2:
+        uid = conn2.execute(text("SELECT current_setting('app.user_id', true)")).scalar()
+        assert not uid or uid == "", "Errored transaction must not leak app.user_id to recycled pool connection"
+        current_uid = conn2.execute(text("SELECT public.app_current_user_id()")).scalar()
+        assert current_uid is None, "Recycled connection after error must evaluate app_current_user_id() to NULL"
+
+
+def test_trust_handshake_function_validation():
+    """Verify public.app_verify_trust_handshake correctly validates HMAC without exposing secrets."""
+    settings = get_settings()
+    app_engine = create_engine(settings.database_url, future=True)
+    nonce = uuid.uuid4().hex
+    valid_sig = compute_identity_sig(nonce)
+    tampered_sig = "tampered_" + valid_sig[9:]
+
+    with app_engine.connect() as conn:
+        # Valid signature yields True
+        is_valid = conn.execute(
+            text("SELECT public.app_verify_trust_handshake(CAST(:nonce AS text), CAST(:sig AS text))"),
+            {"nonce": nonce, "sig": valid_sig},
+        ).scalar()
+        assert is_valid is True
+
+        # Tampered signature yields False
+        is_invalid = conn.execute(
+            text("SELECT public.app_verify_trust_handshake(CAST(:nonce AS text), CAST(:sig AS text))"),
+            {"nonce": nonce, "sig": tampered_sig},
+        ).scalar()
+        assert is_invalid is False
+
+        # Nonce mismatch yields False
+        is_mismatch = conn.execute(
+            text("SELECT public.app_verify_trust_handshake(CAST(:nonce AS text), CAST(:sig AS text))"),
+            {"nonce": "different_nonce", "sig": valid_sig},
+        ).scalar()
+        assert is_mismatch is False
+
+        # NULL / empty values yield False
+        assert conn.execute(
+            text("SELECT public.app_verify_trust_handshake(NULL, CAST(:sig AS text))"),
+            {"sig": valid_sig},
+        ).scalar() is False
+        assert conn.execute(
+            text("SELECT public.app_verify_trust_handshake(CAST(:nonce AS text), NULL)"),
+            {"nonce": nonce},
+        ).scalar() is False
+
+

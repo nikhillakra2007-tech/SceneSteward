@@ -51,6 +51,11 @@ def main() -> int:
 
 def _seed() -> int:
     settings = get_settings()
+    from app.core.lifecycle_guards import ensure_safe_destructive_environment
+    ensure_safe_destructive_environment(
+        settings=settings,
+        operation_name="demo seed data creation",
+    )
     if settings.auth_provider != "dev":
         print("Refusing: seed script is for local dev (AUTH_PROVIDER=dev).", file=sys.stderr)
         return 2

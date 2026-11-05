@@ -27,6 +27,7 @@ import contextvars
 import logging
 from collections.abc import Generator
 from functools import lru_cache
+from typing import Any
 
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.engine import Engine
@@ -198,3 +199,48 @@ def check_database(engine: Engine | None = None) -> dict[str, str]:
         return {"status": "ok"}
     except Exception as exc:  # noqa: BLE001 — health must never raise or leak internals
         return {"status": "unavailable", "error_category": type(exc).__name__}
+
+
+def verify_database_trust(engine: Engine | None = None) -> dict[str, Any]:
+    """Cryptographic handshake verifying that application secret matches PostgreSQL RLS trust boundary."""
+    import uuid
+
+    eng = engine or get_engine()
+    nonce = f"probe-{uuid.uuid4()}"
+    sig = compute_identity_sig(nonce)
+    try:
+        with eng.connect() as conn:
+            try:
+                verified = conn.execute(
+                    text("SELECT public.app_verify_trust_handshake(CAST(:nonce AS text), CAST(:sig AS text))"),
+                    {"nonce": nonce, "sig": sig},
+                ).scalar()
+                if verified is True:
+                    return {"status": "ok", "ok": True}
+                if verified is False:
+                    return {
+                        "status": "trust_secret_mismatch",
+                        "ok": False,
+                        "detail": "Application DATABASE_IDENTITY_SECRET does not match PostgreSQL private.app_secrets",
+                    }
+            except Exception as e:  # noqa: BLE001
+                # Rollback autobegun transaction first
+                conn.rollback()
+                # Fallback to testing via app_current_user_id inside an explicit transaction
+                test_uid = str(uuid.uuid4())
+                u_sig = compute_identity_sig(test_uid)
+                with conn.begin():
+                    conn.execute(
+                        text("SELECT set_config('app.user_id', :uid, true), set_config('app.user_sig', :sig, true)"),
+                        {"uid": test_uid, "sig": u_sig},
+                    )
+                    res_uid = conn.execute(text("SELECT public.app_current_user_id()")).scalar()
+                    if str(res_uid) == test_uid:
+                        return {"status": "ok", "ok": True}
+                return {
+                    "status": "trust_secret_mismatch",
+                    "ok": False,
+                    "detail": f"Application DATABASE_IDENTITY_SECRET failed app_current_user_id verification: {e}",
+                }
+    except Exception as exc:  # noqa: BLE001
+        return {"status": "error", "ok": False, "detail": str(exc)[:200]}
