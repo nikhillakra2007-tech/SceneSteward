@@ -37,36 +37,75 @@ export interface Project {
   updated_at: string;
 }
 
+export const CANONICAL_CATEGORIES = [
+  'interview_recording',
+  'documentary_appearance',
+  'name_identification',
+  'face_identification',
+  'sensitive_personal_details',
+  'promotional_clips',
+  'festival_submissions',
+  'ai_transcription',
+  'voice_cloning',
+  'synthetic_likeness',
+  'third_party_ai_processing',
+  'new_audience',
+  'new_territory',
+  'new_platform',
+  'new_story_context',
+] as const;
+
+export type CanonicalCategory = (typeof CANONICAL_CATEGORIES)[number];
+
 export interface Participant {
   id: string;
   project_id: string;
-  user_id: string | null;
+  user_id?: string | null;
   display_name: string;
   preferred_language: string;
   preferred_contact_method: string;
-  status: string;
-  notes: string | null;
+  participant_status: string;
+  status?: string; // backwards compatibility alias
+  notes?: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export interface ConsentChoice {
+export interface ConsentChoiceIn {
   category: string;
   choice: 'agreed' | 'declined' | 'not_discussed' | 'needs_clarification' | 'awaiting_confirmation' | 'explained';
-  notes?: string;
-  expires_at?: string | null;
+  explanation?: string | null;
+  evidence_reference?: string | null;
+  source_type?: string;
+  confidence_if_extracted?: number | null;
+}
+
+export interface ConsentChoiceOut {
+  id: string;
+  category: string;
+  choice: string;
+  explanation?: string | null;
+  evidence_reference?: string | null;
+  source_type: string;
+  confidence_if_extracted?: number | null;
+  confirmed_by?: string | null;
+  confirmed_at?: string | null;
+  created_at: string;
 }
 
 export interface ConsentRecord {
   id: string;
   participant_id: string;
   project_id: string;
-  source_type: 'release_form' | 'interview' | 'verbal_recorded' | 'written_correspondence' | 'system_import';
+  source_type: string;
   source_document_id: string | null;
-  status: 'draft' | 'pending_confirmation' | 'confirmed' | 'superseded';
+  record_status?: string;
+  status?: string; // alias
   explanation: string | null;
-  choices: Record<string, { choice: string; notes?: string; expires_at?: string | null }>;
-  confirmed_by_participant_at: string | null;
+  choices: ConsentChoiceOut[] | Record<string, any>;
+  confirmed_by_participant_at?: string | null;
+  confirmed_at?: string | null;
+  version_number?: number;
   version: number;
   created_at: string;
 }
@@ -111,7 +150,7 @@ export interface Review {
   project_id: string;
   proposed_use_id: string;
   review_status: 'pending' | 'in_progress' | 'decided' | 'escalated' | 'dismissed';
-  human_decision: 'approved' | 'approved_with_conditions' | 'rejected' | 'needs_participant_discussion' | null;
+  human_decision: 'approve' | 'decline' | 'request_changes' | 'needs_participant_discussion' | 'escalate' | string | null;
   decision_reason: string | null;
   decided_by: string | null;
   decided_at: string | null;
@@ -125,8 +164,8 @@ export interface Task {
   project_id: string;
   title: string;
   description: string | null;
-  status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
-  priority: 'low' | 'medium' | 'high' | 'urgent';
+  status: 'pending' | 'open' | 'in_progress' | 'completed' | 'done' | 'cancelled';
+  priority: 'low' | 'medium' | 'normal' | 'high' | 'urgent';
   owner_user_id: string | null;
   due_date: string | null;
   created_at: string;
@@ -136,10 +175,13 @@ export interface ReleaseDocument {
   id: string;
   project_id: string;
   participant_id: string | null;
-  file_name: string;
+  storage_key?: string;
+  original_filename: string;
+  file_name?: string; // alias
   mime_type: string;
-  file_size_bytes: number;
-  scan_status: 'clean' | 'infected' | 'skipped' | 'failed';
+  file_size: number;
+  file_size_bytes?: number; // alias
+  scan_status: 'clean' | 'infected' | 'skipped' | 'failed' | 'processing' | string;
   extracted_text: string | null;
   created_at: string;
 }
@@ -148,15 +190,19 @@ export interface Communication {
   id: string;
   project_id: string;
   participant_id: string;
-  channel: 'email' | 'sms' | 'portal';
-  subject: string;
-  body: string;
-  status: 'draft' | 'approved' | 'sent' | 'failed' | 'delivered';
-  requires_response: boolean;
-  version: number;
+  communication_type: string;
+  channel?: string; // alias
+  subject: string | null;
+  draft_content: string | null;
+  body?: string; // alias
+  communication_status: string;
+  status?: string; // alias
+  created_by?: string;
   approved_by: string | null;
-  approved_at: string | null;
+  approved_at?: string | null;
   sent_at: string | null;
+  requires_response?: boolean;
+  version?: number;
   created_at: string;
 }
 
@@ -292,19 +338,34 @@ export const api = {
   },
 
   // Consent
-  async getParticipantConsents(participantId: string): Promise<{ items: ConsentRecord[]; total: number }> {
-    return apiFetch<{ items: ConsentRecord[]; total: number }>(`/api/v1/participants/${participantId}/consents`);
+  async getParticipantConsents(participantId: string, token?: string): Promise<{ items: ConsentRecord[]; total: number }> {
+    const q = token ? `?token=${encodeURIComponent(token)}` : '';
+    return apiFetch<{ items: ConsentRecord[]; total: number }>(`/api/v1/participants/${participantId}/consent-records${q}`);
   },
 
   async createConsentRecord(participantId: string, data: {
     source_type: string;
     source_document_id?: string | null;
     explanation?: string;
-    choices: Record<string, { choice: string; notes?: string; expires_at?: string | null }>;
+    choices: ConsentChoiceIn[] | Record<string, { choice: string; notes?: string; explanation?: string }>;
   }): Promise<ConsentRecord> {
+    const formattedChoices: ConsentChoiceIn[] = Array.isArray(data.choices)
+      ? data.choices
+      : Object.entries(data.choices).map(([category, item]) => ({
+          category,
+          choice: (item.choice as any) || 'not_discussed',
+          explanation: item.explanation || item.notes || undefined,
+          source_type: data.source_type || 'manual',
+        }));
+
     return apiFetch<ConsentRecord>(`/api/v1/participants/${participantId}/consent-records`, {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify({
+        source_type: data.source_type,
+        source_document_id: data.source_document_id || null,
+        explanation: data.explanation || null,
+        choices: formattedChoices,
+      }),
     });
   },
 
@@ -321,29 +382,49 @@ export const api = {
 
   // Documents
   async listDocuments(projectId: string): Promise<{ items: ReleaseDocument[]; total: number }> {
-    return apiFetch<{ items: ReleaseDocument[]; total: number }>(`/api/v1/projects/${projectId}/documents`);
+    const res = await apiFetch<{ items: any[]; total: number }>(`/api/v1/projects/${projectId}/documents`);
+    return {
+      total: res.total,
+      items: (res.items || []).map((doc) => ({
+        ...doc,
+        file_name: doc.original_filename || doc.file_name,
+        file_size_bytes: doc.file_size || doc.file_size_bytes,
+      })),
+    };
   },
 
-  async createUploadUrl(projectId: string, data: {
-    file_name: string;
+  async createUploadUrl(participantId: string, data: {
+    original_filename: string;
     mime_type: string;
-    file_size_bytes: number;
-    participant_id?: string | null;
-  }): Promise<{ document_id: string; upload_url: string; storage_key: string }> {
-    return apiFetch(`/api/v1/projects/${projectId}/documents/upload-url`, {
+    file_size: number;
+  }): Promise<{ storage_key: string; upload_url: string; expires_in_seconds: number; max_upload_bytes: number }> {
+    return apiFetch(`/api/v1/participants/${participantId}/documents/upload-url`, {
       method: 'POST',
       body: JSON.stringify(data),
     });
   },
 
-  async completeUpload(projectId: string, data: {
-    document_id: string;
+  async completeUpload(participantId: string, data: {
     storage_key: string;
+    original_filename: string;
+    mime_type: string;
+    file_size: number;
+    title?: string;
+    document_type?: string;
+    notes?: string;
   }): Promise<ReleaseDocument> {
-    return apiFetch<ReleaseDocument>(`/api/v1/projects/${projectId}/documents/complete-upload`, {
+    const doc = await apiFetch<any>(`/api/v1/participants/${participantId}/documents/complete-upload`, {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify({
+        ...data,
+        document_type: data.document_type || 'release_form',
+      }),
     });
+    return {
+      ...doc,
+      file_name: doc.original_filename || doc.file_name,
+      file_size_bytes: doc.file_size || doc.file_size_bytes,
+    };
   },
 
   async extractDocument(documentId: string): Promise<{ document_id: string; extracted_text: string }> {
@@ -404,13 +485,22 @@ export const api = {
   },
 
   async recordHumanDecision(reviewId: string, data: {
-    decision: 'approved' | 'approved_with_conditions' | 'rejected';
+    decision: 'approve' | 'decline' | 'request_changes' | 'needs_participant_discussion' | 'escalate' | 'approved' | 'rejected' | 'approved_with_conditions' | string;
     reason: string;
     expected_version: number;
   }): Promise<Review> {
+    let normalized = data.decision;
+    if (normalized === 'approved') normalized = 'approve';
+    if (normalized === 'rejected') normalized = 'decline';
+    if (normalized === 'approved_with_conditions') normalized = 'request_changes';
+
     return apiFetch<Review>(`/api/v1/reviews/${reviewId}/human-decision`, {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify({
+        decision: normalized,
+        reason: data.reason,
+        expected_version: data.expected_version,
+      }),
     });
   },
 
@@ -443,27 +533,54 @@ export const api = {
   // Communications
   async listCommunications(projectId: string, participantId?: string): Promise<Communication[]> {
     const q = participantId ? `?participant_id=${participantId}` : '';
-    return apiFetch<Communication[]>(`/api/v1/projects/${projectId}/communications${q}`);
+    const items = await apiFetch<any[]>(`/api/v1/projects/${projectId}/communications${q}`);
+    return (items || []).map((comm) => ({
+      ...comm,
+      channel: comm.communication_type || comm.channel,
+      body: comm.draft_content || comm.body,
+      status: comm.communication_status || comm.status,
+    }));
   },
 
   async createDraftCommunication(projectId: string, data: {
     participant_id: string;
-    channel: string;
+    communication_type?: string;
+    channel?: string;
     subject: string;
-    body: string;
+    draft_content?: string;
+    body?: string;
     requires_response?: boolean;
   }): Promise<Communication> {
-    return apiFetch<Communication>(`/api/v1/projects/${projectId}/communications`, {
+    const commType = data.communication_type || data.channel || 'email';
+    const content = data.draft_content || data.body || '';
+    const res = await apiFetch<any>(`/api/v1/projects/${projectId}/communications`, {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify({
+        participant_id: data.participant_id,
+        communication_type: commType,
+        subject: data.subject,
+        draft_content: content,
+      }),
     });
+    return {
+      ...res,
+      channel: res.communication_type || res.channel,
+      body: res.draft_content || res.body,
+      status: res.communication_status || res.status,
+    };
   },
 
-  async approveCommunication(communicationId: string, expectedVersion: number): Promise<Communication> {
-    return apiFetch<Communication>(`/api/v1/communications/${communicationId}/approve`, {
+  async approveCommunication(communicationId: string, notes?: string): Promise<Communication> {
+    const res = await apiFetch<any>(`/api/v1/communications/${communicationId}/approve`, {
       method: 'POST',
-      body: JSON.stringify({ expected_version: expectedVersion }),
+      body: JSON.stringify({ notes: notes || null }),
     });
+    return {
+      ...res,
+      channel: res.communication_type || res.channel,
+      body: res.draft_content || res.body,
+      status: res.communication_status || res.status,
+    };
   },
 
   async sendCommunication(communicationId: string): Promise<Communication> {
@@ -472,13 +589,50 @@ export const api = {
     });
   },
 
+  // Participant Portal & Token Security
+  async issueParticipantToken(participantId: string): Promise<{
+    participant_id: string;
+    token: string;
+    expires_in: number;
+    token_type: string;
+  }> {
+    return apiFetch(`/api/v1/participants/${participantId}/access-token`, {
+      method: 'POST',
+    });
+  },
+
+  async getParticipantPortalAccess(participantId: string, token: string): Promise<Participant> {
+    const res = await apiFetch<Participant>(`/api/v1/participants/${participantId}/portal-access?token=${encodeURIComponent(token)}`);
+    return {
+      ...res,
+      status: res.participant_status || res.status,
+    };
+  },
+
+  async submitClarificationRequest(
+    participantId: string,
+    data: {
+      concern: string;
+      category?: string;
+      additional_context?: string;
+    },
+    token?: string,
+  ): Promise<{ participant_id: string; task_id: string; status: string; message: string }> {
+    const q = token ? `?token=${encodeURIComponent(token)}` : '';
+    return apiFetch(`/api/v1/participants/${participantId}/clarification-requests${q}`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
   // Timeline
   async getProjectTimeline(projectId: string): Promise<{ items: TimelineEntry[]; next_cursor: string | null }> {
     return apiFetch(`/api/v1/projects/${projectId}/timeline`);
   },
 
-  async getParticipantTimeline(participantId: string): Promise<{ items: TimelineEntry[]; next_cursor: string | null }> {
-    return apiFetch(`/api/v1/participants/${participantId}/timeline`);
+  async getParticipantTimeline(participantId: string, token?: string): Promise<{ items: TimelineEntry[]; next_cursor: string | null }> {
+    const q = token ? `?token=${encodeURIComponent(token)}` : '';
+    return apiFetch(`/api/v1/participants/${participantId}/timeline${q}`);
   },
 
   // Metrics

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { 
   UserCheck, 
   ShieldCheck, 
@@ -14,30 +14,21 @@ import {
   MessageSquare, 
   ArrowLeft 
 } from 'lucide-react';
-import { api, Participant, ConsentRecord, ProposedUse, TimelineEntry } from '@/lib/api';
+import { 
+  api, 
+  Participant, 
+  ConsentRecord, 
+  ProposedUse, 
+  TimelineEntry,
+  CANONICAL_CATEGORIES 
+} from '@/lib/api';
 import { ChoiceBadge } from '@/components/ConsentBadge';
-
-const CANONICAL_CATEGORIES = [
-  'interview_inclusion',
-  'name_attribution',
-  'likeness_display',
-  'voice_recording',
-  'sensitive_topics',
-  'historical_footage',
-  'personal_photos',
-  'location_disclosure',
-  'family_mention',
-  'dramatization',
-  'voice_cloning',
-  'promotional_trailers',
-  'social_media_clips',
-  'international_broadcast',
-  'future_syndication'
-];
 
 export default function ParticipantPortalPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const participantId = params?.id as string;
+  const token = searchParams.get('token');
 
   const [participant, setParticipant] = useState<Participant | null>(null);
   const [consents, setConsents] = useState<ConsentRecord[]>([]);
@@ -48,6 +39,7 @@ export default function ParticipantPortalPage() {
   // Participant Feedback Form
   const [feedback, setFeedback] = useState('');
   const [feedbackSent, setFeedbackSent] = useState(false);
+  const [submittingFeedback, setSubmittingFeedback] = useState(false);
 
   useEffect(() => {
     async function loadData() {
@@ -55,14 +47,21 @@ export default function ParticipantPortalPage() {
       setLoading(true);
       setError(null);
       try {
-        const pt = await api.getParticipant(participantId);
-        setParticipant(pt);
-
-        const cList = await api.getParticipantConsents(participantId);
-        setConsents(cList.items || []);
-
-        const tl = await api.getParticipantTimeline(participantId);
-        setTimeline(tl.items || []);
+        if (token) {
+          const pt = await api.getParticipantPortalAccess(participantId, token);
+          setParticipant(pt);
+          const cList = await api.getParticipantConsents(participantId, token);
+          setConsents(cList.items || []);
+          const tl = await api.getParticipantTimeline(participantId, token);
+          setTimeline(tl.items || []);
+        } else {
+          const pt = await api.getParticipant(participantId);
+          setParticipant(pt);
+          const cList = await api.getParticipantConsents(participantId);
+          setConsents(cList.items || []);
+          const tl = await api.getParticipantTimeline(participantId);
+          setTimeline(tl.items || []);
+        }
       } catch (err: any) {
         setError(err.message || 'Error loading participant record');
       } finally {
@@ -70,13 +69,36 @@ export default function ParticipantPortalPage() {
       }
     }
     loadData();
-  }, [participantId]);
+  }, [participantId, token]);
 
-  const handleSendFeedback = (e: React.FormEvent) => {
+  const handleSendFeedback = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!feedback.trim()) return;
-    setFeedbackSent(true);
-    setFeedback('');
+    setSubmittingFeedback(true);
+    try {
+      await api.submitClarificationRequest(
+        participantId,
+        { concern: feedback.trim() },
+        token || undefined,
+      );
+      setFeedbackSent(true);
+      setFeedback('');
+    } catch (err: any) {
+      alert(`Submission failed: ${err.message}`);
+    } finally {
+      setSubmittingFeedback(false);
+    }
+  };
+
+  const getChoiceForCategory = (choices: any, cat: string) => {
+    if (Array.isArray(choices)) {
+      const found = choices.find((ch: any) => ch.category === cat);
+      if (found) return found.choice;
+    } else if (choices && typeof choices === 'object') {
+      const data = choices[cat];
+      return typeof data === 'object' && data ? data.choice : (data || 'not_discussed');
+    }
+    return 'not_discussed';
   };
 
   if (loading) {
@@ -131,7 +153,7 @@ export default function ParticipantPortalPage() {
         <div className="pt-2 flex flex-wrap gap-4 text-xs text-slate-400">
           <div>Language: <span className="text-slate-200 font-semibold">{participant.preferred_language}</span></div>
           <div>Contact: <span className="text-slate-200 font-semibold">{participant.preferred_contact_method}</span></div>
-          <div>Status: <span className="text-emerald-400 font-semibold font-mono">{participant.status}</span></div>
+          <div>Status: <span className="text-emerald-400 font-semibold font-mono">{participant.participant_status || participant.status}</span></div>
         </div>
       </div>
 
@@ -144,12 +166,12 @@ export default function ParticipantPortalPage() {
               <span>Your Current Consent Record</span>
             </h2>
             <p className="text-xs text-slate-400">
-              {latestConsent ? `Version ${latestConsent.version} (${latestConsent.source_type})` : 'No consent record on file'}
+              {latestConsent ? `Version ${latestConsent.version_number || latestConsent.version} (${latestConsent.source_type})` : 'No consent record on file'}
             </p>
           </div>
           {latestConsent && (
             <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800 font-mono">
-              {latestConsent.status}
+              {latestConsent.record_status || latestConsent.status}
             </span>
           )}
         </div>
@@ -164,8 +186,7 @@ export default function ParticipantPortalPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
               {CANONICAL_CATEGORIES.map((cat) => {
-                const choiceData = latestConsent.choices?.[cat];
-                const choiceVal = typeof choiceData === 'object' && choiceData ? choiceData.choice : (choiceData || 'not_discussed');
+                const choiceVal = getChoiceForCategory(latestConsent.choices, cat);
                 return (
                   <div key={cat} className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 flex flex-col justify-between space-y-2">
                     <span className="text-xs font-medium text-slate-300">
@@ -212,10 +233,10 @@ export default function ParticipantPortalPage() {
             <div className="flex justify-end">
               <button
                 type="submit"
-                disabled={!feedback.trim()}
+                disabled={!feedback.trim() || submittingFeedback}
                 className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold disabled:opacity-50 transition"
               >
-                Send to Care Lead
+                {submittingFeedback ? 'Sending...' : 'Send to Care Lead'}
               </button>
             </div>
           </form>

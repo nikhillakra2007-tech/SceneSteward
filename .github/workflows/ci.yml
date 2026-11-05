@@ -93,6 +93,16 @@ jobs:
         run: |
           pytest -v backend/tests
 
+      - name: Verify 8-Step Documentary Lifecycle
+        env:
+          DATABASE_URL_ADMIN: "postgresql+psycopg://scenesteward:superuser_test_password@localhost:5432/scenesteward_test"
+          DATABASE_URL_TEST: "postgresql+psycopg://scenesteward_app:app_test_password@localhost:5432/scenesteward_test"
+          DATABASE_IDENTITY_SECRET: "ci_database_identity_secret_2026_test_only"
+          APP_ENCRYPTION_KEY: "67yRWp6G4NQfdYCVyaajG5JspDXj6h8qHmly0wKpDkM="
+          AUTH_DEV_SECRET: "ci_auth_dev_secret_0123456789abcdef0123456789abcdef"
+        run: |
+          python backend/scripts/verify_documentary_lifecycle.py
+
   frontend-build:
     name: Frontend Type Check & Production Build
     runs-on: ubuntu-latest

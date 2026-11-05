@@ -185,6 +185,31 @@ def complete_upload(participant_id: uuid.UUID, payload: CompleteUploadRequest,
     return _doc_out(document)
 
 
+@router.get("/projects/{project_id}/documents", response_model=Page[DocumentOut])
+def list_project_documents(
+    project_id: uuid.UUID,
+    db: DbSession,
+    user: CurrentUser,
+    page: Annotated[PageParams, Depends(page_params)],
+) -> Page[DocumentOut]:
+    """List all release documents across participants in a project workspace."""
+    membership = get_membership(db, project_id, user)
+    if membership.role not in permissions.SENSITIVE_READ_ROLES:
+        raise PermissionDenied("Documents are visible to owner, producer, or participant-care-lead")
+    stmt = select(ReleaseDocument).where(ReleaseDocument.project_id == project_id)
+    total = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
+    rows = (
+        db.execute(
+            stmt.order_by(ReleaseDocument.created_at.desc())
+            .limit(page.limit)
+            .offset(page.offset)
+        )
+        .scalars()
+        .all()
+    )
+    return Page(items=[_doc_out(d) for d in rows], total=total, limit=page.limit, offset=page.offset)
+
+
 @router.get("/participants/{participant_id}/documents", response_model=Page[DocumentOut])
 def list_documents(participant_id: uuid.UUID, db: DbSession, user: CurrentUser,
                    page: Annotated[PageParams, Depends(page_params)]) -> Page[DocumentOut]:
