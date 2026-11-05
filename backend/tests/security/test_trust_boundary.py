@@ -209,3 +209,95 @@ def test_runtime_role_privilege_escalation_blocked():
     # 4. Attempt TRUNCATE
     err4 = attempt_sql("TRUNCATE TABLE projects")
     assert "permission denied" in err4
+
+
+def test_adversarial_tampered_signature_rejected(two_projects):
+    """Even a single bit flip in user_sig must invalidate authentication and yield 0 rows."""
+    settings = get_settings()
+    app_engine = create_engine(settings.database_url, future=True)
+    user_a = two_projects["user_a"]
+    sig_a = compute_identity_sig(str(user_a.id))
+
+    # Tamper with the last character of the signature
+    tampered_sig = sig_a[:-1] + ("0" if sig_a[-1] != "0" else "1")
+
+    with app_engine.connect() as conn:
+        conn.execute(
+            text("SELECT set_config('app.user_id', :uid, true), set_config('app.user_sig', :sig, true)"),
+            {"uid": str(user_a.id), "sig": tampered_sig},
+        )
+        rows = conn.execute(text("SELECT id FROM projects")).scalars().all()
+        assert len(rows) == 0, "Tampered signature must yield 0 projects under RLS"
+
+
+def test_adversarial_wrong_secret_rejected(two_projects):
+    """Signature computed with an invalid key must be rejected."""
+    settings = get_settings()
+    app_engine = create_engine(settings.database_url, future=True)
+    user_a = two_projects["user_a"]
+    sig_attacker = compute_identity_sig(str(user_a.id), secret="attacker_forged_secret_key_12345")
+
+    with app_engine.connect() as conn:
+        conn.execute(
+            text("SELECT set_config('app.user_id', :uid, true), set_config('app.user_sig', :sig, true)"),
+            {"uid": str(user_a.id), "sig": sig_attacker},
+        )
+        rows = conn.execute(text("SELECT id FROM projects")).scalars().all()
+        assert len(rows) == 0, "Signature with wrong secret must yield 0 projects"
+
+
+def test_adversarial_malformed_user_id_fails_safe():
+    """Non-UUID user_id payloads must safely return NULL without crashing."""
+    settings = get_settings()
+    app_engine = create_engine(settings.database_url, future=True)
+    malformed_id = "admin' OR 1=1--"
+    sig = compute_identity_sig(malformed_id)
+
+    with app_engine.connect() as conn:
+        conn.execute(
+            text("SELECT set_config('app.user_id', :uid, true), set_config('app.user_sig', :sig, true)"),
+            {"uid": malformed_id, "sig": sig},
+        )
+        val = conn.execute(text("SELECT public.app_current_user_id()")).scalar()
+        assert val is None, "Malformed UUID user_id must fail safe and return NULL"
+
+
+def test_runtime_role_cannot_modify_app_secrets():
+    """scenesteward_app cannot insert, update, or delete private.app_secrets."""
+    settings = get_settings()
+    app_engine = create_engine(settings.database_url, future=True)
+
+    for action, stmt in [
+        ("INSERT", "INSERT INTO private.app_secrets (key_name, secret_val) VALUES ('rogue', 'val')"),
+        ("UPDATE", "UPDATE private.app_secrets SET secret_val = 'compromised' WHERE key_name = 'identity_secret'"),
+        ("DELETE", "DELETE FROM private.app_secrets WHERE key_name = 'identity_secret'"),
+    ]:
+        with app_engine.connect() as conn:
+            with pytest.raises(Exception) as exc_info:
+                conn.execute(text(stmt))
+            assert "permission denied" in str(exc_info.value).lower(), f"{action} on private.app_secrets must be denied"
+
+
+def test_connection_pool_context_leakage_prevented(two_projects):
+    """Proves that transaction-scoped RLS context does not leak to subsequent connections in the pool."""
+    settings = get_settings()
+    app_engine = create_engine(settings.database_url, pool_size=1, max_overflow=0, future=True)
+    user_a = two_projects["user_a"]
+    sig_a = compute_identity_sig(str(user_a.id))
+
+    # Connection 1: set user context in a transaction and complete it
+    with app_engine.begin() as conn1:
+        conn1.execute(
+            text("SELECT set_config('app.user_id', :uid, true), set_config('app.user_sig', :sig, true)"),
+            {"uid": str(user_a.id), "sig": sig_a},
+        )
+        current_uid = conn1.execute(text("SELECT public.app_current_user_id()")).scalar()
+        assert current_uid == user_a.id
+
+    # Connection 2: checked out from the pool without setting user context
+    with app_engine.begin() as conn2:
+        uid = conn2.execute(text("SELECT current_setting('app.user_id', true)")).scalar()
+        assert not uid or uid == "", "Transaction-scoped app.user_id must not leak across pool checkouts"
+        current_uid = conn2.execute(text("SELECT public.app_current_user_id()")).scalar()
+        assert current_uid is None, "Subsequent connection without context must evaluate app_current_user_id() to NULL"
+
