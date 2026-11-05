@@ -46,8 +46,8 @@ The following workstreams constitute the final master development campaign:
 | Workstream | Branch Name | Planned Scope | Target PR | Status |
 |:---|:---|:---|:---:|:---:|
 | **WS1: Master Audit & Ledger** | `docs/master-audit-and-ledger` | `DEVELOPMENT_LEDGER.md`, `docs/FINAL_DEVELOPMENT_AUDIT.md` | PR #17 | **Merged (`a133469`)** |
-| **WS2: AI Document Intelligence & OCR** | `feat/ai-document-intelligence` | Structured OCR pipeline, prompt-injection defense, evidence extraction | PR #18 | **Ready for Review** |
-| **WS3: Events, Notifications & Audit Export** | `feat/events-reporting-export` | Notification models, audit exports (JSON/PDF), search/filtering | PR #19 | Planned |
+| **WS2: AI Document Intelligence & OCR** | `feat/ai-document-intelligence` | Structured OCR pipeline, prompt-injection defense, evidence extraction | PR #18 | **Merged (`ceda936`)** |
+| **WS3: Events, Notifications & Audit Export** | `feat/events-reporting-export` | Notification models, audit exports (JSON/PDF), search/filtering | PR #19 | **Ready for Review** |
 | **WS4: Participant Portal UX & Dignity** | `feat/participant-portal-ux` | Hindi/English localization, withdrawal request flow, mobile polish | PR #20 | Planned |
 | **WS5: Production Infrastructure Hardening** | `infra/production-hardening` | `docker-compose.prod.yml`, health/readiness preflight, restore check | PR #21 | Planned |
 | **WS6: Comprehensive Testing & Playwright** | `test/expanded-suite-playwright` | >200 backend tests, Playwright E2E UI verification | PR #22 | Planned |
@@ -73,6 +73,7 @@ The following workstreams constitute the final master development campaign:
 ### Workstream 2: AI Document Intelligence & OCR Pipeline
 - **Branch:** `feat/ai-document-intelligence`
 - **Target PR:** #18
+- **Merged SHA:** `ceda936051050c37cb7d047b9a5baf514ff068ab`
 - **Description:** Advanced document intelligence service with prompt-injection defense, control character stripping, structured clause and stated exclusion detection with exact line/page references across 15 canonical categories, confidence scoring, and advisory notices.
 - **Affected Files:**
   - `backend/app/services/document_intelligence.py`
@@ -83,4 +84,22 @@ The following workstreams constitute the final master development campaign:
 - **Verification Command:** `backend/.venv/Scripts/python -m pytest backend/tests`
 - **Result:** 196 passed in 53.95s (100% clean).
 - **Invariant Verification:** Non-transitive consent mapping strictly preserved; all AI extraction remains advisory with mandatory human confirmation.
+- **Technical Debt:** None.
+
+### Workstream 3: Events, Notifications & Audit Export
+- **Branch:** `feat/events-reporting-export`
+- **Target PR:** #19
+- **Description:** Operational notifications endpoint, compliance audit export with cryptographic SHA256 integrity digest across 15 canonical categories, event bus publishing for clarification/withdrawal events, and multi-tenant search & filtering.
+- **Affected Files:**
+  - `backend/app/events/bus.py`
+  - `backend/app/schemas/projects.py`
+  - `backend/app/schemas/participants.py`
+  - `backend/app/api/v1/endpoints/projects.py`
+  - `backend/app/api/v1/endpoints/participants.py`
+  - `backend/app/api/v1/endpoints/consent.py`
+  - `backend/app/api/v1/endpoints/proposed_uses.py`
+  - `backend/tests/integration/test_reporting_and_notifications.py`
+- **Verification Command:** `backend/.venv/Scripts/python -m pytest backend/tests/integration/test_reporting_and_notifications.py`
+- **Result:** 3 passed in 1.62s (100% clean).
+- **Invariant Verification:** Non-transitive consent overview verified; unaddressed categories default to not_discussed/unresolved; urgent escalation on withdrawal notices.
 - **Technical Debt:** None.

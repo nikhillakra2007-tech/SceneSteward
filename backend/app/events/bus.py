@@ -19,8 +19,12 @@ TOPICS = {
     "switch.delivery_failed",
     "switch.delivery_succeeded",
     "document.extraction_failed",
+    "document.extracted",
     "agent_run.completed",
     "review.human_decision",
+    "participant.clarification_requested",
+    "participant.withdrawal_requested",
+    "consent.updated",
 }
 
 
