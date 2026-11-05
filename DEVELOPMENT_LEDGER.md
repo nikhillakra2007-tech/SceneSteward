@@ -47,8 +47,8 @@ The following workstreams constitute the final master development campaign:
 |:---|:---|:---|:---:|:---:|
 | **WS1: Master Audit & Ledger** | `docs/master-audit-and-ledger` | `DEVELOPMENT_LEDGER.md`, `docs/FINAL_DEVELOPMENT_AUDIT.md` | PR #17 | **Merged (`a133469`)** |
 | **WS2: AI Document Intelligence & OCR** | `feat/ai-document-intelligence` | Structured OCR pipeline, prompt-injection defense, evidence extraction | PR #18 | **Merged (`ceda936`)** |
-| **WS3: Events, Notifications & Audit Export** | `feat/events-reporting-export` | Notification models, audit exports (JSON/PDF), search/filtering | PR #19 | **Ready for Review** |
-| **WS4: Participant Portal UX & Dignity** | `feat/participant-portal-ux` | Hindi/English localization, withdrawal request flow, mobile polish | PR #20 | Planned |
+| **WS3: Events, Notifications & Audit Export** | `feat/events-reporting-export` | Notification models, audit exports (JSON/PDF), search/filtering | PR #19 | **Merged (`25f8862`)** |
+| **WS4: Participant Portal UX & Dignity** | `feat/participant-portal-ux` | Hindi/English localization, withdrawal request flow, mobile polish | PR #20 | **Ready for Review** |
 | **WS5: Production Infrastructure Hardening** | `infra/production-hardening` | `docker-compose.prod.yml`, health/readiness preflight, restore check | PR #21 | Planned |
 | **WS6: Comprehensive Testing & Playwright** | `test/expanded-suite-playwright` | >200 backend tests, Playwright E2E UI verification | PR #22 | Planned |
 | **WS7: Final 14 Reports & Release to Main** | `release/final-production-maturity` | 14 comprehensive audit reports, final merge to `main` | PR #23 | Planned |
@@ -89,6 +89,7 @@ The following workstreams constitute the final master development campaign:
 ### Workstream 3: Events, Notifications & Audit Export
 - **Branch:** `feat/events-reporting-export`
 - **Target PR:** #19
+- **Merged SHA:** `25f8862b950fe5a6242c0c93e0f5f78b0afd3c9f`
 - **Description:** Operational notifications endpoint, compliance audit export with cryptographic SHA256 integrity digest across 15 canonical categories, event bus publishing for clarification/withdrawal events, and multi-tenant search & filtering.
 - **Affected Files:**
   - `backend/app/events/bus.py`
@@ -102,4 +103,16 @@ The following workstreams constitute the final master development campaign:
 - **Verification Command:** `backend/.venv/Scripts/python -m pytest backend/tests/integration/test_reporting_and_notifications.py`
 - **Result:** 3 passed in 1.62s (100% clean).
 - **Invariant Verification:** Non-transitive consent overview verified; unaddressed categories default to not_discussed/unresolved; urgent escalation on withdrawal notices.
+- **Technical Debt:** None.
+
+### Workstream 4: Participant Portal UX, Dignity & Localization
+- **Branch:** `feat/participant-portal-ux`
+- **Target PR:** #20
+- **Description:** Participant transparency portal enhancement featuring complete English / Hindi bilingual localization dictionary for all 15 canonical categories, formal consent withdrawal flow with immediate operational escalation, and mobile-responsive UI design.
+- **Affected Files:**
+  - `frontend/src/app/participant/[id]/page.tsx`
+  - `frontend/src/lib/api.ts`
+- **Verification Command:** `cd frontend; npm run build`
+- **Result:** Next.js production build cleanly compiled across all 5 routes.
+- **Invariant Verification:** Full dignity guarantee asserted prominently in English and Hindi; non-transitive category boundaries respected.
 - **Technical Debt:** None.
