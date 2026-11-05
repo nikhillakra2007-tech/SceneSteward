@@ -82,6 +82,17 @@ def _verify_schema():
     if row not in expected:
         raise RuntimeError(f"test database is not at head (found {row!r}); run alembic upgrade head")
 
+    from app.core.config import get_settings
+    with _admin_engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO private.app_secrets (key_name, secret_val) "
+                "VALUES ('identity_secret', :sec) "
+                "ON CONFLICT (key_name) DO UPDATE SET secret_val = EXCLUDED.secret_val"
+            ),
+            {"sec": get_settings().database_identity_secret},
+        )
+
 
 @pytest.fixture()
 def db():

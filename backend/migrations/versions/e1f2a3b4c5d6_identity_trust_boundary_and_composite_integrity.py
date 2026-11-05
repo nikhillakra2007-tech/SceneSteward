@@ -18,14 +18,16 @@ def upgrade() -> None:
     # -------------------------------------------------------------------------
     # 1. Private schema and secret store for RLS identity verification
     # -------------------------------------------------------------------------
-    op.execute("""
+    import os
+    identity_secret = os.environ.get("DATABASE_IDENTITY_SECRET", "scenesteward_db_trust_secret_2026_prod_v1")
+    op.execute(f"""
         CREATE SCHEMA IF NOT EXISTS private;
         CREATE TABLE IF NOT EXISTS private.app_secrets (
             key_name text PRIMARY KEY,
             secret_val text NOT NULL
         );
         INSERT INTO private.app_secrets (key_name, secret_val)
-        VALUES ('identity_secret', 'scenesteward_db_trust_secret_2026_prod_v1')
+        VALUES ('identity_secret', '{identity_secret}')
         ON CONFLICT (key_name) DO UPDATE SET secret_val = EXCLUDED.secret_val;
 
         REVOKE ALL ON SCHEMA private FROM public, scenesteward_app, scenesteward_readonly;
