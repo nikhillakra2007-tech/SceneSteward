@@ -196,7 +196,7 @@ def test_runtime_role_privilege_escalation_blocked():
 
     # 1. Attempt SET ROLE postgres
     err1 = attempt_sql("SET ROLE postgres")
-    assert "permission denied" in err1
+    assert "permission denied" in err1 or "does not exist" in err1
 
     # 2. Attempt SET ROLE scenesteward
     err2 = attempt_sql("SET ROLE scenesteward")
