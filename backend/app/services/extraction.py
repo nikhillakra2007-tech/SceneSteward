@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from app.core.exceptions import PreconditionFailed
 from app.models import DocumentPage, Participant, ReleaseDocument
 from app.schemas.consent import ConsentChoiceIn
-from app.services import audit, consent_service
+from app.services import audit, consent_service, document_intelligence
 
 logger = logging.getLogger("scenesteward.extraction")
 
@@ -72,16 +72,27 @@ def extract_document(db: Session, *, document: ReleaseDocument, actor: tuple[str
 
     db.execute(delete(DocumentPage).where(DocumentPage.document_id == document.id))
     total = 0
-    for number, content in pages:
-        total += len(content)
+    all_flags = []
+    for number, raw_content in pages:
+        clean_text, flags = document_intelligence.sanitize_text(raw_content, page_number=number)
+        all_flags.extend(flags)
+        total += len(clean_text)
         if total > MAX_TEXT_CHARS:
             break
-        db.add(DocumentPage(document_id=document.id, page_number=number, content=content))
+        db.add(DocumentPage(document_id=document.id, page_number=number, content=clean_text))
     document.extraction_status = "extracted"
+    if all_flags:
+        audit.record(db, project_id=document.project_id, participant_id=document.participant_id,
+                     actor_type=actor[0], actor_id=actor[1],
+                     action="document.adversarial_flag_detected", entity_type="release_document",
+                     entity_id=document.id,
+                     new_value={"flag_count": len(all_flags), "categories": [f.category for f in all_flags]},
+                     correlation_id=correlation_id)
     audit.record(db, project_id=document.project_id, participant_id=document.participant_id,
                  actor_type=actor[0], actor_id=actor[1],
                  action="document.extracted", entity_type="release_document", entity_id=document.id,
-                 new_value={"pages": len(pages)}, correlation_id=correlation_id)
+                 new_value={"pages": len(pages), "sanitized": True, "flags_detected": len(all_flags)},
+                 correlation_id=correlation_id)
     return document
 
 
