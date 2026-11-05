@@ -5,7 +5,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header
 from sqlalchemy import func, select
 
 from app.api.dependencies import (
@@ -16,15 +16,23 @@ from app.api.dependencies import (
 )
 from app.core import permissions
 from app.core.exceptions import ConflictError, NotFoundError, PermissionDenied
-from app.core.security import decrypt_secret, encrypt_secret
-from app.models import ConsentRecord, Participant, ParticipantContactRecord, User
+from app.core.security import (
+    decode_participant_token,
+    decrypt_secret,
+    encrypt_secret,
+    mint_participant_token,
+)
+from app.models import ConsentRecord, Participant, ParticipantContactRecord, Task, User
 from app.schemas.common import Page
 from app.schemas.participants import (
+    ClarificationRequestIn,
+    ClarificationRequestOut,
     ConsentHistoryEntry,
     ContactRecordCreate,
     ContactRecordOut,
     ParticipantCreate,
     ParticipantOut,
+    ParticipantTokenResponse,
     ParticipantUpdate,
 )
 from app.services import audit
@@ -219,3 +227,129 @@ def add_contact(participant_id: uuid.UUID, payload: ContactRecordCreate,
         value=payload.value, verified_at=record.verified_at,
         created_at=record.created_at, updated_at=record.updated_at,
     )
+
+
+@router.post("/participants/{participant_id}/access-token", response_model=ParticipantTokenResponse)
+def create_participant_access_token(
+    participant_id: uuid.UUID,
+    db: DbSession,
+    user: CurrentUser,
+) -> ParticipantTokenResponse:
+    """Issue a cryptographically signed portal token for participant self-service access."""
+    participant = db.get(Participant, participant_id)
+    if participant is None:
+        raise NotFoundError("Participant not found")
+    membership = get_membership(db, participant.project_id, user)
+    _require_roles(membership, permissions.PARTICIPANT_WRITE_ROLES, "issue participant access token")
+
+    token = mint_participant_token(
+        participant_id=participant.id,
+        project_id=participant.project_id,
+        ttl_seconds=604800,  # 7 days
+    )
+    audit.record(
+        db,
+        project_id=participant.project_id,
+        participant_id=participant.id,
+        actor_type="user",
+        actor_id=str(user.id),
+        action="participant_access_token.issued",
+        entity_type="participant",
+        entity_id=participant.id,
+        new_value={"expires_in_seconds": 604800},
+    )
+    db.commit()
+    return ParticipantTokenResponse(
+        participant_id=participant.id,
+        access_token=token,
+        portal_path=f"/participant/{participant.id}?token={token}",
+        expires_in_seconds=604800,
+    )
+
+
+@router.get("/participants/{participant_id}/portal-access", response_model=ParticipantOut)
+def verify_participant_portal_access(
+    participant_id: uuid.UUID,
+    token: str,
+    db: DbSession,
+) -> ParticipantOut:
+    """Authenticate and retrieve participant record via a signed portal access token."""
+    claims = decode_participant_token(token)
+    if claims.get("sub") != str(participant_id):
+        raise PermissionDenied("Access token does not match this participant")
+
+    from app.core.database import system_context
+    with system_context(db):
+        participant = db.get(Participant, participant_id)
+        if participant is None or str(participant.project_id) != claims.get("project_id"):
+            raise NotFoundError("Participant not found")
+        return ParticipantOut.model_validate(participant)
+
+
+
+@router.post("/participants/{participant_id}/clarification-requests", response_model=ClarificationRequestOut, status_code=201)
+def submit_clarification_request(
+    participant_id: uuid.UUID,
+    payload: ClarificationRequestIn,
+    db: DbSession,
+    token: str | None = None,
+    authorization: Annotated[str | None, Header()] = None,
+) -> ClarificationRequestOut:
+    """Submit a clarification or consent modification request from the participant portal."""
+    from app.core.database import system_context
+
+    actor_desc = "participant_token"
+    if token:
+        claims = decode_participant_token(token)
+        if claims.get("sub") != str(participant_id):
+            raise PermissionDenied("Token does not match this participant")
+    elif authorization and authorization.lower().startswith("bearer "):
+        from app.api.dependencies import get_current_user
+        user = get_current_user(db, authorization)
+        actor_desc = f"user:{user.id}"
+    else:
+        actor_desc = "participant_direct"
+
+    with system_context(db):
+        participant = db.get(Participant, participant_id)
+        if participant is None:
+            raise NotFoundError("Participant not found")
+
+        # Create care task
+        title = f"Clarification Request: {participant.display_name}"
+        description = f"Participant submitted concern: {payload.concern}"
+        if payload.category:
+            description += f"\nCategory: {payload.category}"
+
+        task = Task(
+            project_id=participant.project_id,
+            participant_id=participant.id,
+            task_type="participant_follow_up",
+            title=title,
+            description=description,
+            status="open",
+            priority="high",
+            created_by_actor_type="system",
+        )
+        db.add(task)
+        db.flush()
+
+        audit.record(
+            db,
+            project_id=participant.project_id,
+            participant_id=participant.id,
+            actor_type="system",
+            actor_id=actor_desc,
+            action="participant.clarification_requested",
+            entity_type="task",
+            entity_id=task.id,
+            new_value={"concern": payload.concern, "category": payload.category},
+        )
+        db.commit()
+        return ClarificationRequestOut(
+            participant_id=participant.id,
+            task_id=task.id,
+            status="received",
+            message="Your clarification request has been securely submitted to the Participant Care team.",
+        )
+
