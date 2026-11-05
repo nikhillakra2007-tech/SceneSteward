@@ -51,7 +51,7 @@ The following workstreams constitute the final master development campaign:
 | **WS4: Participant Portal UX & Dignity** | `feat/participant-portal-ux` | Hindi/English localization, withdrawal request flow, mobile polish | PR #20 | **Merged (`ef65eba`)** |
 | **WS5: Production Infrastructure Hardening** | `infra/production-hardening` | `docker-compose.prod.yml`, health/readiness preflight, restore check | PR #21 | **Merged (`5607f37`)** |
 | **WS6: Comprehensive Testing & Playwright** | `test/expanded-suite-playwright` | >200 backend tests, Playwright E2E UI verification | PR #22 | **Merged (`ff6bfa2`)** |
-| **WS7: Final 14 Reports & Release to Main** | `release/final-production-maturity` | 14 comprehensive audit reports, final merge to `main` | PR #23 / #24 | **Ready for Release** |
+| **WS7: Final 14 Reports & Release to Main** | `release/final-production-maturity` | 14 comprehensive audit reports, final merge to `main` | PR #23 / #24 | **Merged to Main (`73237b1`)** |
 
 ---
 
