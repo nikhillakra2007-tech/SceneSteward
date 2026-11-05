@@ -19,7 +19,24 @@ def upgrade() -> None:
     # 1. Private schema and secret store for RLS identity verification
     # -------------------------------------------------------------------------
     import os
-    identity_secret = os.environ.get("DATABASE_IDENTITY_SECRET", "scenesteward_db_trust_secret_2026_prod_v1")
+    app_env = os.environ.get("APP_ENV", "development").lower()
+    identity_secret = os.environ.get("DATABASE_IDENTITY_SECRET")
+
+    # In production, require an explicitly configured, non-placeholder identity secret
+    if app_env == "production":
+        if not identity_secret or identity_secret in (
+            "CHANGE_ME", "CHANGE_ME_GENERATE_WITH_OPENSSL_RAND_HEX_32",
+            "scenesteward_db_trust_secret_2026_prod_v1", "scenesteward_staging_identity_trust_secret_2026"
+        ) or "CHANGE_ME" in identity_secret:
+            raise RuntimeError(
+                "CRITICAL SECURITY CONFIGURATION ERROR: DATABASE_IDENTITY_SECRET must be an explicitly "
+                "generated, high-entropy secret when applying migrations in production! "
+                "Fallbacks and placeholder defaults are strictly prohibited in production."
+            )
+    elif not identity_secret:
+        # Development fallback only
+        identity_secret = "scenesteward_db_trust_secret_2026_prod_v1"
+
     op.execute(f"""
         CREATE SCHEMA IF NOT EXISTS private;
         CREATE TABLE IF NOT EXISTS private.app_secrets (
@@ -28,7 +45,7 @@ def upgrade() -> None:
         );
         INSERT INTO private.app_secrets (key_name, secret_val)
         VALUES ('identity_secret', '{identity_secret}')
-        ON CONFLICT (key_name) DO UPDATE SET secret_val = EXCLUDED.secret_val;
+        ON CONFLICT (key_name) DO NOTHING;
 
         REVOKE ALL ON SCHEMA private FROM public, scenesteward_app, scenesteward_readonly;
         REVOKE ALL ON ALL TABLES IN SCHEMA private FROM public, scenesteward_app, scenesteward_readonly;

@@ -16,6 +16,13 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_ROOT))
 
 # Force the test databases BEFORE any app import; pydantic-settings prefers env vars over .env.
+_orig_env = os.environ.get("APP_ENV", "").lower()
+if _orig_env in {"production", "staging"}:
+    raise RuntimeError(
+        f"CRITICAL SECURITY GUARD: Refusing to execute test suite in APP_ENV={_orig_env!r}! "
+        "Test fixtures execute destructive operations (TRUNCATE) and must never target staging or production."
+    )
+
 _test_url = os.environ.get("DATABASE_URL_TEST")
 _admin_url = os.environ.get("DATABASE_URL_ADMIN")
 _backend_env = BACKEND_ROOT / ".env"
@@ -36,6 +43,22 @@ if _test_url is None or _admin_url is None:
         "Tests require DATABASE_URL_TEST (runtime role, RLS enforced) and "
         "DATABASE_URL_ADMIN (schema owner). Set them or provide backend/.env."
     )
+
+# Strict URL & Target Environment Guards
+for _label, _check_url in [("DATABASE_URL_TEST", _test_url), ("DATABASE_URL_ADMIN", _admin_url)]:
+    _db_part = _check_url.rsplit("/", 1)[-1].split("?")[0]
+    if not _db_part.endswith("_test"):
+        raise RuntimeError(
+            f"CRITICAL SECURITY GUARD: Refusing to execute tests! {_label} target database {_db_part!r} "
+            "does not end with '_test'. Tests must target a dedicated disposable test database."
+        )
+    _lower_url = _check_url.lower()
+    for _forbidden_host in [".rds.amazonaws.com", ".supabase.co", ".database.windows.net", "cockroachlabs.cloud"]:
+        if _forbidden_host in _lower_url:
+            raise RuntimeError(
+                f"CRITICAL SECURITY GUARD: Refusing to execute tests against cloud database host {_forbidden_host!r}!"
+            )
+
 os.environ["DATABASE_URL"] = _test_url
 os.environ["MIGRATION_DATABASE_URL"] = _admin_url
 os.environ["APP_ENV"] = "test"
@@ -72,6 +95,12 @@ _AdminSession = sessionmaker(bind=_admin_engine, autoflush=False, expire_on_comm
 def _verify_schema():
     expected = ("e1f2a3b4c5d6",)
     with _admin_engine.connect() as conn:
+        active_db = conn.execute(text("SELECT current_database()")).scalar()
+        if not active_db or not str(active_db).endswith("_test"):
+            raise RuntimeError(
+                f"CRITICAL DATABASE TRUST VIOLATION: Connected database {active_db!r} is not a test database! "
+                "Refusing to inspect schema or modify trust configuration."
+            )
         try:
             row = conn.execute(text("select version_num from alembic_version")).scalar()
         except Exception as exc:
@@ -83,6 +112,10 @@ def _verify_schema():
         raise RuntimeError(f"test database is not at head (found {row!r}); run alembic upgrade head")
 
     from app.core.config import get_settings
+    settings = get_settings()
+    if settings.app_env != "test":
+        raise RuntimeError(f"CRITICAL GUARD: Cannot synchronize test secret in environment {settings.app_env!r}")
+
     with _admin_engine.begin() as conn:
         conn.execute(
             text(
@@ -90,7 +123,7 @@ def _verify_schema():
                 "VALUES ('identity_secret', :sec) "
                 "ON CONFLICT (key_name) DO UPDATE SET secret_val = EXCLUDED.secret_val"
             ),
-            {"sec": get_settings().database_identity_secret},
+            {"sec": settings.database_identity_secret},
         )
 
 

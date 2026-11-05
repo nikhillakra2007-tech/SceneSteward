@@ -53,6 +53,9 @@ from app.main import create_app
 def run_verification() -> bool:
     settings = get_settings()
 
+    if settings.is_production:
+        raise RuntimeError("CRITICAL GUARD: Refusing to execute documentary lifecycle verification against production!")
+
     admin_url = os.environ.get("DATABASE_URL_ADMIN")
     if not admin_url:
         env_file = BACKEND_DIR / ".env"
@@ -66,6 +69,12 @@ def run_verification() -> bool:
         from sqlalchemy import create_engine, text
         admin_eng = create_engine(admin_url)
         with admin_eng.begin() as conn:
+            active_db = conn.execute(text("SELECT current_database()")).scalar()
+            if not active_db or not str(active_db).endswith("_test"):
+                raise RuntimeError(
+                    f"CRITICAL GUARD: Target database {active_db!r} is not a test database! "
+                    "Refusing to modify trust secret."
+                )
             conn.execute(
                 text(
                     "INSERT INTO private.app_secrets (key_name, secret_val) "

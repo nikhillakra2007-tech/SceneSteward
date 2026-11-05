@@ -19,3 +19,8 @@ docs
 !backend/.env.example
 docker-compose*.yml
 README.md
+frontend
+node_modules
+**/node_modules
+.next
+**/.next

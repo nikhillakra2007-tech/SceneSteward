@@ -56,6 +56,7 @@ def _setup(client, db):
     r = client.post(f"/api/v1/projects/{project.id}/participants",
                     json={"display_name": "Release Subject"}, headers=auth_headers(owner))
     pid = r.json()["id"]
+    db.commit()
     return owner, project, pid
 
 
