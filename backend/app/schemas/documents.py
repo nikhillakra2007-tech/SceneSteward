@@ -72,3 +72,37 @@ class DocumentOut(ORMModel):
 class DownloadUrlResponse(BaseModel):
     download_url: str
     expires_in_seconds: int
+
+
+class AdversarialFlagOut(BaseModel):
+    category: str
+    snippet: str
+    page_number: int
+    remediation: str
+
+
+class DetectedClauseOut(BaseModel):
+    category: str
+    choice_indication: str
+    quote: str
+    page_number: int
+    line_number: int
+    confidence: float
+    explanation: str
+
+
+class StatedExclusionOut(BaseModel):
+    quote: str
+    page_number: int
+    targeted_category: str | None
+
+
+class DocumentIntelligenceOut(BaseModel):
+    document_id: str
+    total_pages: int
+    content_hash: str
+    adversarial_flags: list[AdversarialFlagOut]
+    detected_clauses: list[DetectedClauseOut]
+    stated_exclusions: list[StatedExclusionOut]
+    unmentioned_categories: list[str]
+    advisory_notice: str

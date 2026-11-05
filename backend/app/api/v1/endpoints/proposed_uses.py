@@ -76,13 +76,16 @@ def create_proposed_use(project_id: uuid.UUID, payload: ProposedUseCreate,
 @router.get("/projects/{project_id}/proposed-uses", response_model=Page[ProposedUseOut])
 def list_proposed_uses(project_id: uuid.UUID, db: DbSession, user: CurrentUser,
                        page: Annotated[PageParams, Depends(page_params)],
-                       status: str | None = None) -> Page[ProposedUseOut]:
+                       status: str | None = None,
+                       participant_id: uuid.UUID | None = None) -> Page[ProposedUseOut]:
     membership = get_membership(db, project_id, user)
     if membership.role not in permissions.READ_ROLES:
         raise PermissionDenied("This role cannot view proposed uses")
     stmt = select(ProposedUse).where(ProposedUse.project_id == project_id)
     if status:
         stmt = stmt.where(ProposedUse.status == status)
+    if participant_id:
+        stmt = stmt.where(ProposedUse.participant_id == participant_id)
     total = db.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
     rows = db.execute(stmt.order_by(ProposedUse.created_at.desc())
                       .limit(page.limit).offset(page.offset)).scalars().all()

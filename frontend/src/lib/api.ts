@@ -615,6 +615,7 @@ export const api = {
       concern: string;
       category?: string;
       additional_context?: string;
+      request_type?: string;
     },
     token?: string,
   ): Promise<{ participant_id: string; task_id: string; status: string; message: string }> {

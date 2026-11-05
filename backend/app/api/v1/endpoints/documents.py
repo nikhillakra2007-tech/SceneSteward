@@ -25,12 +25,13 @@ from app.core.exceptions import (
     PreconditionFailed,
 )
 from app.integrations.storage import get_storage_provider
-from app.models import Participant, ReleaseDocument
+from app.models import DocumentPage, Participant, ReleaseDocument
 from app.schemas.common import Page
 from app.schemas.documents import (
     ALLOWED_EXTENSIONS,
     ALLOWED_UPLOAD_MIMES,
     CompleteUploadRequest,
+    DocumentIntelligenceOut,
     DocumentOut,
     DownloadUrlResponse,
     UploadUrlRequest,
@@ -286,3 +287,27 @@ def propose_consent(document_id: uuid.UUID, db: DbSession, user: CurrentUser) ->
         return {"proposed_record_id": None, "detail": "No explicit participant statements detected; nothing proposed."}
     return {"proposed_record_id": str(record_id),
             "detail": "Proposed consent record created; it is UNCONFIRMED until a human confirms it."}
+
+
+@router.get("/documents/{document_id}/intelligence", response_model=DocumentIntelligenceOut)
+def get_document_intelligence(document_id: uuid.UUID, db: DbSession, user: CurrentUser) -> DocumentIntelligenceOut:
+    """Run structured document intelligence, extracting line-referenced clauses,
+    identifying adversarial injection attempts, and flagging stated exclusions.
+    All outputs remain strictly advisory and require human confirmation."""
+    document = db.get(ReleaseDocument, document_id)
+    if document is None:
+        raise NotFoundError("Document not found")
+    _doc_access(db, document, user)
+    if document.extraction_status != "extracted":
+        raise PreconditionFailed("Document text has not been extracted yet", code="not_extracted")
+
+    pages = (
+        db.query(DocumentPage)
+        .filter(DocumentPage.document_id == document.id)
+        .order_by(DocumentPage.page_number)
+        .all()
+    )
+    from app.services.document_intelligence import analyze_document_pages
+
+    report = analyze_document_pages([(p.page_number, p.content) for p in pages], document_id=str(document.id))
+    return DocumentIntelligenceOut.model_validate(report.to_dict())
