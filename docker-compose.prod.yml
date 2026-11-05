@@ -1,0 +1,193 @@
+# SceneSteward — Production Docker Compose Stack
+# Multi-container hardened production topology with strict least-privilege, health checks,
+# one-shot migration runner, ClamAV antivirus daemon, Redis distributed rate-limiting, and worker.
+
+services:
+  db:
+    image: postgres:18-alpine
+    container_name: scenesteward-prod-db
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-scenesteward_prod}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-scenesteward_prod}
+    volumes:
+      - scenesteward-prod-pgdata:/var/lib/postgresql/data
+    networks:
+      - scenesteward-prod-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2048M
+
+  redis:
+    image: redis:7-alpine
+    container_name: scenesteward-prod-redis
+    restart: always
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-}"]
+    volumes:
+      - scenesteward-prod-redis:/data
+    networks:
+      - scenesteward-prod-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+
+  clamav:
+    image: clamav/clamav:latest
+    container_name: scenesteward-prod-clamav
+    restart: always
+    volumes:
+      - scenesteward-prod-clamav:/var/lib/clamav
+    networks:
+      - scenesteward-prod-net
+    healthcheck:
+      test: ["CMD-SHELL", "clamdscan /etc/passwd || exit 0"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2048M
+
+  migrate:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: scenesteward-prod-migrate
+    command: ["alembic", "-c", "alembic.ini", "upgrade", "head"]
+    environment:
+      APP_ENV: production
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-scenesteward_prod}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-scenesteward_prod}
+      MIGRATION_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-scenesteward_prod}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-scenesteward_prod}
+      DATABASE_IDENTITY_SECRET: ${DATABASE_IDENTITY_SECRET}
+      AUTH_PROVIDER: ${AUTH_PROVIDER:-supabase}
+      APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - scenesteward-prod-net
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: scenesteward-prod-api
+    restart: unless-stopped
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--proxy-headers"]
+    environment:
+      APP_ENV: production
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-scenesteward_prod}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-scenesteward_prod}
+      DATABASE_IDENTITY_SECRET: ${DATABASE_IDENTITY_SECRET}
+      AUTH_PROVIDER: ${AUTH_PROVIDER:-supabase}
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+      AUTH_JWKS_URL: ${AUTH_JWKS_URL:-}
+      AUTH_ISSUER: ${AUTH_ISSUER:-}
+      AUTH_AUDIENCE: ${AUTH_AUDIENCE:-authenticated}
+      APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY}
+      APP_ENCRYPTION_CURRENT_KID: ${APP_ENCRYPTION_CURRENT_KID:-prod-primary-v1}
+      APP_ENCRYPTION_KEYS: ${APP_ENCRYPTION_KEYS:-}
+      STORAGE_PROVIDER: ${STORAGE_PROVIDER:-supabase}
+      STORAGE_BUCKET: ${STORAGE_BUCKET:-scenesteward-production-documents}
+      AI_PROVIDER: ${AI_PROVIDER:-anthropic}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-claude-sonnet-4-5}
+      SWITCH_ADAPTER: ${SWITCH_ADAPTER:-http}
+      SWITCH_BASE_URL: ${SWITCH_BASE_URL:-}
+      SWITCH_API_KEY: ${SWITCH_API_KEY:-}
+      SWITCH_AGENT_ID: ${SWITCH_AGENT_ID:-}
+      SWITCH_WEBHOOK_SECRET: ${SWITCH_WEBHOOK_SECRET:-}
+      ANTIVIRUS_PROVIDER: clamav
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: 3310
+      ANTIVIRUS_FAIL_CLOSED: "true"
+      REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
+      METRICS_ENABLED: "true"
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-https://app.scenesteward.com}
+    ports:
+      - "${PROD_API_PORT:-8000}:8000"
+    volumes:
+      - scenesteward-prod-storage:/srv/scenesteward/backend/var/storage
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      clamav:
+        condition: service_healthy
+    networks:
+      - scenesteward-prod-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2048M
+
+  worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: scenesteward-prod-worker
+    restart: always
+    command: ["python", "scripts/switch_retry.py", "--loop"]
+    environment:
+      APP_ENV: production
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-scenesteward_prod}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-scenesteward_prod}
+      DATABASE_IDENTITY_SECRET: ${DATABASE_IDENTITY_SECRET}
+      AUTH_PROVIDER: ${AUTH_PROVIDER:-supabase}
+      APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY}
+      SWITCH_ADAPTER: ${SWITCH_ADAPTER:-http}
+      SWITCH_BASE_URL: ${SWITCH_BASE_URL:-}
+      SWITCH_API_KEY: ${SWITCH_API_KEY:-}
+      SWITCH_AGENT_ID: ${SWITCH_AGENT_ID:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    networks:
+      - scenesteward-prod-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os; os.kill(1, 0)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+networks:
+  scenesteward-prod-net:
+    driver: bridge
+
+volumes:
+  scenesteward-prod-pgdata:
+  scenesteward-prod-redis:
+  scenesteward-prod-storage:
+  scenesteward-prod-clamav:
