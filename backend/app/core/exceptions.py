@@ -87,7 +87,8 @@ def register_exception_handlers(app) -> None:
     @app.exception_handler(Exception)
     async def _unhandled(request: Request, exc: Exception) -> JSONResponse:
         correlation_id = getattr(request.state, "correlation_id", None)
-        # Never leak internals; the full traceback is logged server-side.
+        import logging
+        logging.getLogger("scenesteward.exceptions").exception("Unhandled error: %s", exc)
         return JSONResponse(
             status_code=500,
             content=error_body("internal_error", "An unexpected error occurred", correlation_id=correlation_id),

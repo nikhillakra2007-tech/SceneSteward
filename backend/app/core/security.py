@@ -55,6 +55,40 @@ def mint_dev_token(*, user_id: str, email: str, full_name: str, settings: Settin
     return jwt.encode(claims, s.auth_dev_secret, algorithm="HS256")
 
 
+def mint_participant_token(
+    *, participant_id: uuid.UUID, project_id: uuid.UUID, settings: Settings | None = None, ttl_seconds: int = 604800
+) -> str:
+    """Mint a cryptographically signed participant portal token."""
+    s = settings or get_settings()
+    secret = s.auth_dev_secret or s.database_identity_secret
+    now = int(time.time())
+    claims = {
+        "sub": str(participant_id),
+        "project_id": str(project_id),
+        "scope": "participant_portal",
+        "iss": s.auth_issuer,
+        "iat": now,
+        "exp": now + ttl_seconds,
+    }
+    return jwt.encode(claims, secret, algorithm="HS256")
+
+
+def decode_participant_token(token: str, settings: Settings | None = None) -> dict[str, Any]:
+    """Validate and decode a participant portal token."""
+    s = settings or get_settings()
+    secret = s.auth_dev_secret or s.database_identity_secret
+    try:
+        payload = jwt.decode(token, secret, algorithms=["HS256"], issuer=s.auth_issuer)
+    except jwt.ExpiredSignatureError as exc:
+        raise Unauthenticated("Participant portal access token expired", code="token_expired") from exc
+    except jwt.PyJWTError as exc:
+        raise Unauthenticated("Invalid participant portal token", code="invalid_token") from exc
+    if payload.get("scope") != "participant_portal":
+        raise Unauthenticated("Invalid token scope", code="invalid_scope")
+    return payload
+
+
+
 def _decode_dev(token: str, s: Settings) -> TokenClaims:
     if not s.auth_dev_secret:
         raise Unauthenticated("Dev auth is not configured")

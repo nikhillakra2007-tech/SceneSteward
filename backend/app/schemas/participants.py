@@ -82,3 +82,24 @@ class ConsentHistoryEntry(BaseModel):
     confirmed_at: datetime | None
     created_at: datetime
     choice_count: int
+
+
+class ParticipantTokenResponse(BaseModel):
+    participant_id: uuid.UUID
+    access_token: str
+    portal_path: str
+    expires_in_seconds: int
+
+
+class ClarificationRequestIn(BaseModel):
+    concern: str = Field(min_length=3, max_length=5000)
+    category: str | None = None
+    contact_method: str | None = None
+
+
+class ClarificationRequestOut(BaseModel):
+    participant_id: uuid.UUID
+    task_id: uuid.UUID
+    status: str = "received"
+    message: str
+
