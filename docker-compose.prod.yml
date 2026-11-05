@@ -1,10 +1,11 @@
 # SceneSteward — Production Docker Compose Stack
 # Multi-container hardened production topology with strict least-privilege, health checks,
 # one-shot migration runner, ClamAV antivirus daemon, Redis distributed rate-limiting, and worker.
+# All secrets must be provided explicitly through environment configuration.
 
 services:
   db:
-    image: postgres:18-alpine
+    image: postgres:16-alpine
     container_name: scenesteward-prod-db
     restart: always
     environment:
@@ -31,16 +32,17 @@ services:
     image: redis:7-alpine
     container_name: scenesteward-prod-redis
     restart: always
-    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-}"]
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}"]
     volumes:
       - scenesteward-prod-redis:/data
     networks:
       - scenesteward-prod-net
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
       timeout: 3s
       retries: 5
+      start_period: 5s
     deploy:
       resources:
         limits:
@@ -48,7 +50,7 @@ services:
           memory: 512M
 
   clamav:
-    image: clamav/clamav:latest
+    image: clamav/clamav:1.4
     container_name: scenesteward-prod-clamav
     restart: always
     volumes:
@@ -56,10 +58,10 @@ services:
     networks:
       - scenesteward-prod-net
     healthcheck:
-      test: ["CMD-SHELL", "clamdscan /etc/passwd || exit 0"]
+      test: ["CMD-SHELL", "clamdscan /dev/null"]
       interval: 15s
       timeout: 5s
-      retries: 10
+      retries: 15
       start_period: 90s
     deploy:
       resources:
@@ -121,7 +123,7 @@ services:
       CLAMAV_HOST: clamav
       CLAMAV_PORT: 3310
       ANTIVIRUS_FAIL_CLOSED: "true"
-      REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       METRICS_ENABLED: "true"
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-https://app.scenesteward.com}
     ports:

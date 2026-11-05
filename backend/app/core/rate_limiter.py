@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import ipaddress
 import logging
+import re
 import threading
 import time
 from dataclasses import dataclass
@@ -122,7 +123,8 @@ class RateLimiter:
                 )
                 self.redis_client.ping()
                 self._redis_available = True
-                logger.info("Connected to distributed Redis rate limiter: %s", redis_url)
+                safe_url = re.sub(r":([^@]+)@", ":***@", redis_url)
+                logger.info("Connected to distributed Redis rate limiter: %s", safe_url)
             except REDIS_EXCEPTIONS as e:
                 logger.warning("Redis rate limiter unavailable (%s); using in-memory limiter", e)
                 self._redis_available = False
