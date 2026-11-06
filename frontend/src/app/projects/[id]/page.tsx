@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { 
@@ -15,13 +15,17 @@ import {
   History, 
   Plus, 
   AlertTriangle, 
+  AlertCircle,
   CheckCircle2, 
   ShieldAlert, 
-  Clock,
   ArrowRight,
   ExternalLink,
   Upload,
-  Play
+  Play,
+  Search,
+  Copy,
+  Info,
+  X
 } from 'lucide-react';
 import { 
   api, 
@@ -37,11 +41,13 @@ import {
   CANONICAL_CATEGORIES,
   getAuthToken 
 } from '@/lib/api';
-import { ChoiceBadge, OutcomeBadge } from '@/components/ConsentBadge';
+import { ChoiceBadge } from '@/components/ConsentBadge';
+import { useToast } from '@/components/Toast';
 
 export default function ProjectWorkspacePage() {
   const params = useParams();
   const projectId = params?.id as string;
+  const { success, error: toastError, info } = useToast();
 
   const [activeTab, setActiveTab] = useState<'overview' | 'participants' | 'consents' | 'documents' | 'proposed-uses' | 'reviews' | 'tasks' | 'communications' | 'timeline'>('overview');
   const [project, setProject] = useState<Project | null>(null);
@@ -56,13 +62,21 @@ export default function ProjectWorkspacePage() {
   const [loading, setLoading] = useState(true);
   const [actionError, setActionError] = useState<string | null>(null);
 
+  // Search & Filter state
+  const [participantSearch, setParticipantSearch] = useState('');
+  const [taskStatusFilter, setTaskStatusFilter] = useState<'all' | 'open' | 'completed' | 'urgent'>('all');
+
   // Modals & form states
   const [showAddParticipant, setShowAddParticipant] = useState(false);
+  const [submittingPart, setSubmittingPart] = useState(false);
+  const [partError, setPartError] = useState<string | null>(null);
   const [newPartName, setNewPartName] = useState('');
   const [newPartLang, setNewPartLang] = useState('English');
   const [newPartContact, setNewPartContact] = useState('email');
 
   const [showAddConsent, setShowAddConsent] = useState(false);
+  const [submittingConsent, setSubmittingConsent] = useState(false);
+  const [consentError, setConsentError] = useState<string | null>(null);
   const [consentPartId, setConsentPartId] = useState('');
   const [consentSourceType, setConsentSourceType] = useState('release_form');
   const [consentExplanation, setConsentExplanation] = useState('Production standard release agreement');
@@ -85,6 +99,8 @@ export default function ProjectWorkspacePage() {
   });
 
   const [showAddProposedUse, setShowAddProposedUse] = useState(false);
+  const [submittingUse, setSubmittingUse] = useState(false);
+  const [useError, setUseError] = useState<string | null>(null);
   const [usePartId, setUsePartId] = useState('');
   const [useType, setUseType] = useState('promotional_clips');
   const [usePlatform, setUsePlatform] = useState('Theatrical & Digital');
@@ -95,18 +111,25 @@ export default function ProjectWorkspacePage() {
   const [docPartId, setDocPartId] = useState('');
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadingDoc, setUploadingDoc] = useState(false);
+  const [docError, setDocError] = useState<string | null>(null);
+
+  // OCR preview state
+  const [ocrModalOpen, setOcrModalOpen] = useState(false);
+  const [ocrText, setOcrText] = useState('');
+  const [ocrDocName, setOcrDocName] = useState('');
 
   // Participant portal token notification state
   const [portalNotice, setPortalNotice] = useState<string | null>(null);
 
   const [selectedUseFindings, setSelectedUseFindings] = useState<any[] | null>(null);
-  const [selectedUseAnalysis, setSelectedUseAnalysis] = useState<any | null>(null);
+  const [, setSelectedUseAnalysis] = useState<any | null>(null);
 
   // Review decision form
   const [decidingReviewId, setDecidingReviewId] = useState<string | null>(null);
   const [decisionReason, setDecisionReason] = useState('');
+  const [decidingReviewSubmitting, setDecidingReviewSubmitting] = useState(false);
 
-  const loadWorkspace = async () => {
+  const loadWorkspace = useCallback(async () => {
     if (!projectId || !getAuthToken()) return;
     setLoading(true);
     setActionError(null);
@@ -117,8 +140,8 @@ export default function ProjectWorkspacePage() {
       const parts = await api.listParticipants(projectId);
       setParticipants(parts.items || []);
       if (parts.items?.length > 0) {
-        setConsentPartId(parts.items[0].id);
-        setUsePartId(parts.items[0].id);
+        setConsentPartId((prev) => prev || parts.items[0].id);
+        setUsePartId((prev) => prev || parts.items[0].id);
 
         // Load consents for all participants
         const allConsents: ConsentRecord[] = [];
@@ -127,7 +150,7 @@ export default function ProjectWorkspacePage() {
             const cList = await api.getParticipantConsents(pt.id);
             if (cList.items) allConsents.push(...cList.items);
           } catch {
-            // ignore
+            // ignore partial load errors
           }
         }
         setConsents(allConsents);
@@ -155,32 +178,63 @@ export default function ProjectWorkspacePage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [projectId]);
 
   useEffect(() => {
     loadWorkspace();
-  }, [projectId]);
+  }, [loadWorkspace]);
+
+  // Handle escape key to close any active modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowAddParticipant(false);
+        setShowAddConsent(false);
+        setShowAddProposedUse(false);
+        setShowUploadDoc(false);
+        setOcrModalOpen(false);
+        setDecidingReviewId(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Handlers
   const handleCreateParticipant = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!newPartName.trim()) {
+      setPartError('Participant name is required.');
+      return;
+    }
+    setSubmittingPart(true);
+    setPartError(null);
     try {
       await api.createParticipant(projectId, {
         display_name: newPartName.trim(),
         preferred_language: newPartLang,
         preferred_contact_method: newPartContact,
       });
+      success(`Participant "${newPartName.trim()}" registered successfully!`);
       setShowAddParticipant(false);
       setNewPartName('');
       await loadWorkspace();
     } catch (err: any) {
-      alert(`Failed to add participant: ${err.message}`);
+      setPartError(err.message || 'Failed to add participant');
+      toastError(err.message || 'Failed to add participant');
+    } finally {
+      setSubmittingPart(false);
     }
   };
 
   const handleCreateConsent = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!consentPartId) return;
+    if (!consentPartId) {
+      setConsentError('Please select a participant.');
+      return;
+    }
+    setSubmittingConsent(true);
+    setConsentError(null);
     try {
       const choicesPayload = Object.entries(consentChoices).map(([cat, val]) => ({
         category: cat,
@@ -192,16 +246,25 @@ export default function ProjectWorkspacePage() {
         explanation: consentExplanation,
         choices: choicesPayload,
       });
+      success('Consent agreement logged across all 15 canonical categories!');
       setShowAddConsent(false);
       await loadWorkspace();
     } catch (err: any) {
-      alert(`Failed to record consent: ${err.message}`);
+      setConsentError(err.message || 'Failed to record consent');
+      toastError(err.message || 'Failed to record consent');
+    } finally {
+      setSubmittingConsent(false);
     }
   };
 
   const handleCreateProposedUse = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!usePartId) return;
+    if (!usePartId) {
+      setUseError('Please select a participant.');
+      return;
+    }
+    setSubmittingUse(true);
+    setUseError(null);
     try {
       await api.createProposedUse(projectId, {
         participant_id: usePartId,
@@ -210,11 +273,15 @@ export default function ProjectWorkspacePage() {
         context_description: useDesc,
         run_analysis: true, // triggers backend 63-matrix comparison engine immediately!
       });
+      success('Proposed use submitted and evaluated against canonical consent boundary!');
       setShowAddProposedUse(false);
       await loadWorkspace();
       setActiveTab('proposed-uses');
     } catch (err: any) {
-      alert(`Failed to propose use: ${err.message}`);
+      setUseError(err.message || 'Failed to propose use');
+      toastError(err.message || 'Failed to propose use');
+    } finally {
+      setSubmittingUse(false);
     }
   };
 
@@ -224,9 +291,10 @@ export default function ProjectWorkspacePage() {
       setSelectedUseAnalysis(result);
       const findings = await api.getAgentFindings(useId);
       setSelectedUseFindings(findings);
+      success('Comparison analysis completed.');
       await loadWorkspace();
     } catch (err: any) {
-      alert(`Analysis failed: ${err.message}`);
+      toastError(`Analysis failed: ${err.message}`);
     }
   };
 
@@ -235,7 +303,7 @@ export default function ProjectWorkspacePage() {
       const findings = await api.getAgentFindings(useId);
       setSelectedUseFindings(findings);
     } catch (err: any) {
-      alert(`Failed to load findings: ${err.message}`);
+      toastError(`Failed to load findings: ${err.message}`);
     }
   };
 
@@ -244,29 +312,34 @@ export default function ProjectWorkspacePage() {
     decision: 'approve' | 'decline' | 'request_changes' | 'needs_participant_discussion'
   ) => {
     if (!decisionReason.trim()) {
-      alert('A human decision reason is mandatory for ethical accountability.');
+      toastError('A human decision reason is mandatory for ethical accountability.');
       return;
     }
+    setDecidingReviewSubmitting(true);
     try {
       await api.recordHumanDecision(review.id, {
         decision,
         reason: decisionReason.trim(),
         expected_version: review.version,
       });
+      success(`Decision "${decision.replace(/_/g, ' ')}" committed to audit trail.`);
       setDecidingReviewId(null);
       setDecisionReason('');
       await loadWorkspace();
     } catch (err: any) {
-      alert(`Decision failed: ${err.message}`);
+      toastError(`Decision failed: ${err.message}`);
+    } finally {
+      setDecidingReviewSubmitting(false);
     }
   };
 
   const handleApproveCommunication = async (comm: Communication) => {
     try {
-      await api.approveCommunication(comm.id, 'Approved by production staff');
+      await api.approveCommunication(comm.id, 'Approved by authorized production staff');
+      success('Communication approved for release.');
       await loadWorkspace();
     } catch (err: any) {
-      alert(`Approval failed: ${err.message}`);
+      toastError(`Approval failed: ${err.message}`);
     }
   };
 
@@ -277,18 +350,23 @@ export default function ProjectWorkspacePage() {
       setPortalNotice(`Signed Portal URL: ${url}`);
       try {
         await navigator.clipboard.writeText(url);
+        success('Signed 7-day portal link copied to clipboard!');
       } catch {
-        // clipboard access might be unavailable
+        info('Portal URL generated. Copy from notice bar.');
       }
     } catch (err: any) {
-      alert(`Failed to generate portal link: ${err.message}`);
+      toastError(`Failed to generate portal link: ${err.message}`);
     }
   };
 
   const handleUploadDocument = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!uploadFile || !docPartId) return;
+    if (!uploadFile || !docPartId) {
+      setDocError('Please choose a participant and file.');
+      return;
+    }
     setUploadingDoc(true);
+    setDocError(null);
     try {
       const target = await api.createUploadUrl(docPartId, {
         original_filename: uploadFile.name,
@@ -312,11 +390,13 @@ export default function ProjectWorkspacePage() {
         title: uploadFile.name,
       });
 
+      success(`Document "${uploadFile.name}" uploaded and passed antivirus check!`);
       setShowUploadDoc(false);
       setUploadFile(null);
       await loadWorkspace();
     } catch (err: any) {
-      alert(`Upload failed: ${err.message}`);
+      setDocError(err.message || 'Upload failed');
+      toastError(`Upload failed: ${err.message}`);
     } finally {
       setUploadingDoc(false);
     }
@@ -326,11 +406,33 @@ export default function ProjectWorkspacePage() {
     const nextStatus = task.status === 'completed' || task.status === 'done' ? 'in_progress' : 'done';
     try {
       await api.updateTask(task.id, { status: nextStatus });
+      success(`Task marked as ${nextStatus === 'done' ? 'completed' : 'in progress'}.`);
       await loadWorkspace();
     } catch (err: any) {
-      alert(`Update failed: ${err.message}`);
+      toastError(`Update failed: ${err.message}`);
     }
   };
+
+  const filteredParticipants = useMemo(() => {
+    if (!participantSearch.trim()) return participants;
+    const q = participantSearch.toLowerCase();
+    return participants.filter(
+      (p) =>
+        p.display_name.toLowerCase().includes(q) ||
+        p.preferred_language.toLowerCase().includes(q) ||
+        (p.participant_status || p.status || '').toLowerCase().includes(q)
+    );
+  }, [participants, participantSearch]);
+
+  const filteredTasks = useMemo(() => {
+    return tasks.filter((t) => {
+      const isDone = t.status === 'completed' || t.status === 'done';
+      if (taskStatusFilter === 'open' && isDone) return false;
+      if (taskStatusFilter === 'completed' && !isDone) return false;
+      if (taskStatusFilter === 'urgent' && t.priority !== 'urgent' && t.priority !== 'high') return false;
+      return true;
+    });
+  }, [tasks, taskStatusFilter]);
 
   if (loading) {
     return (
@@ -379,14 +481,20 @@ export default function ProjectWorkspacePage() {
 
         <div className="flex flex-wrap gap-2.5">
           <button
-            onClick={() => setShowAddParticipant(true)}
+            onClick={() => {
+              setPartError(null);
+              setShowAddParticipant(true);
+            }}
             className="inline-flex items-center space-x-1.5 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition"
           >
             <Users className="h-3.5 w-3.5 text-emerald-400" />
             <span>+ Participant</span>
           </button>
           <button
-            onClick={() => setShowAddConsent(true)}
+            onClick={() => {
+              setConsentError(null);
+              setShowAddConsent(true);
+            }}
             disabled={participants.length === 0}
             className="inline-flex items-center space-x-1.5 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition disabled:opacity-40"
           >
@@ -394,13 +502,22 @@ export default function ProjectWorkspacePage() {
             <span>+ Consent Record</span>
           </button>
           <button
-            onClick={() => setShowAddProposedUse(true)}
+            onClick={() => {
+              setUseError(null);
+              setShowAddProposedUse(true);
+            }}
             disabled={participants.length === 0}
             className="inline-flex items-center space-x-1.5 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition shadow-md shadow-emerald-950/60 disabled:opacity-40"
           >
             <GitCompare className="h-3.5 w-3.5" />
             <span>+ Propose Use</span>
           </button>
+          <Link
+            href={`/analytics?project_id=${project.id}`}
+            className="inline-flex items-center space-x-1.5 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-emerald-500/40 text-xs font-semibold transition"
+          >
+            <span>Project Analytics &rarr;</span>
+          </Link>
         </div>
       </div>
 
@@ -497,11 +614,24 @@ export default function ProjectWorkspacePage() {
       {/* Tab 2: Participants */}
       {activeTab === 'participants' && (
         <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h2 className="text-base font-bold text-white">Participant Roster</h2>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="relative max-w-xs w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search participants by name or language..."
+                value={participantSearch}
+                onChange={(e) => setParticipantSearch(e.target.value)}
+                className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+
             <button
-              onClick={() => setShowAddParticipant(true)}
-              className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold"
+              onClick={() => {
+                setPartError(null);
+                setShowAddParticipant(true);
+              }}
+              className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold self-start sm:self-auto"
             >
               <Plus className="h-3.5 w-3.5" />
               <span>Add Participant</span>
@@ -510,8 +640,24 @@ export default function ProjectWorkspacePage() {
 
           {portalNotice && (
             <div className="p-3 rounded-lg bg-indigo-950/80 border border-indigo-700 text-indigo-200 text-xs flex items-center justify-between">
-              <span className="truncate pr-2 font-mono">{portalNotice}</span>
-              <button onClick={() => setPortalNotice(null)} className="text-indigo-400 hover:text-white font-bold ml-2">✕</button>
+              <div className="flex items-center space-x-2 truncate pr-2 font-mono">
+                <Info className="h-4 w-4 text-indigo-400 flex-shrink-0" />
+                <span className="truncate">{portalNotice}</span>
+              </div>
+              <div className="flex items-center space-x-2 flex-shrink-0 ml-2">
+                <button
+                  onClick={() => {
+                    const url = portalNotice.replace('Signed Portal URL: ', '');
+                    navigator.clipboard.writeText(url);
+                    success('Copied portal URL!');
+                  }}
+                  className="inline-flex items-center space-x-1 px-2 py-0.5 rounded bg-indigo-900 hover:bg-indigo-800 text-[11px] text-white"
+                >
+                  <Copy className="h-3 w-3" />
+                  <span>Copy</span>
+                </button>
+                <button onClick={() => setPortalNotice(null)} className="text-indigo-400 hover:text-white font-bold">✕</button>
+              </div>
             </div>
           )}
 
@@ -519,9 +665,13 @@ export default function ProjectWorkspacePage() {
             <div className="p-8 text-center rounded-xl border border-dashed border-slate-800 text-slate-500 text-xs">
               No participants registered yet. Add a participant to begin tracking releases.
             </div>
+          ) : filteredParticipants.length === 0 ? (
+            <div className="p-8 text-center rounded-xl border border-slate-800 bg-slate-900/20 text-slate-400 text-xs">
+              No participants match &ldquo;{participantSearch}&rdquo;.
+            </div>
           ) : (
-            <div className="rounded-xl border border-slate-800 overflow-hidden bg-slate-900/40">
-              <table className="w-full text-left text-xs">
+            <div className="rounded-xl border border-slate-800 overflow-x-auto bg-slate-900/40">
+              <table className="w-full text-left text-xs min-w-[600px]">
                 <thead className="bg-slate-900/80 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-800">
                   <tr>
                     <th className="p-3.5">Name</th>
@@ -532,7 +682,7 @@ export default function ProjectWorkspacePage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/80">
-                  {participants.map((pt) => (
+                  {filteredParticipants.map((pt) => (
                     <tr key={pt.id} className="hover:bg-slate-800/30 transition">
                       <td className="p-3.5 font-semibold text-slate-100">{pt.display_name}</td>
                       <td className="p-3.5 text-slate-300">{pt.preferred_language}</td>
@@ -577,7 +727,10 @@ export default function ProjectWorkspacePage() {
               <p className="text-xs text-slate-400">Canonical category matrix per participant agreement version.</p>
             </div>
             <button
-              onClick={() => setShowAddConsent(true)}
+              onClick={() => {
+                setConsentError(null);
+                setShowAddConsent(true);
+              }}
               disabled={participants.length === 0}
               className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold disabled:opacity-50"
             >
@@ -664,6 +817,7 @@ export default function ProjectWorkspacePage() {
             <button
               onClick={() => {
                 if (participants.length > 0 && !docPartId) setDocPartId(participants[0].id);
+                setDocError(null);
                 setShowUploadDoc(true);
               }}
               disabled={participants.length === 0}
@@ -679,8 +833,8 @@ export default function ProjectWorkspacePage() {
               No release documents uploaded for this project yet.
             </div>
           ) : (
-            <div className="rounded-xl border border-slate-800 overflow-hidden bg-slate-900/40">
-              <table className="w-full text-left text-xs">
+            <div className="rounded-xl border border-slate-800 overflow-x-auto bg-slate-900/40">
+              <table className="w-full text-left text-xs min-w-[600px]">
                 <thead className="bg-slate-900/80 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-800">
                   <tr>
                     <th className="p-3.5">Filename</th>
@@ -710,9 +864,11 @@ export default function ProjectWorkspacePage() {
                           onClick={async () => {
                             try {
                               const ext = await api.extractDocument(doc.id);
-                              alert(`Extracted text preview:\n\n${ext.extracted_text.slice(0, 300)}...`);
+                              setOcrText(ext.extracted_text || 'No text extracted.');
+                              setOcrDocName(doc.original_filename || doc.file_name || 'Document');
+                              setOcrModalOpen(true);
                             } catch (err: any) {
-                              alert(`Extraction failed: ${err.message}`);
+                              toastError(`Extraction failed: ${err.message}`);
                             }
                           }}
                           className="text-xs text-emerald-400 hover:underline font-semibold"
@@ -732,7 +888,7 @@ export default function ProjectWorkspacePage() {
       {/* Tab 5: Proposed Uses & Comparison Engine */}
       {activeTab === 'proposed-uses' && (
         <div className="space-y-4">
-          <div className="flex justify-between items-center">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h2 className="text-base font-bold text-white">Proposed Footage &amp; Likeness Uses</h2>
               <p className="text-xs text-slate-400">
@@ -740,13 +896,24 @@ export default function ProjectWorkspacePage() {
               </p>
             </div>
             <button
-              onClick={() => setShowAddProposedUse(true)}
+              onClick={() => {
+                setUseError(null);
+                setShowAddProposedUse(true);
+              }}
               disabled={participants.length === 0}
-              className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold disabled:opacity-50"
+              className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold disabled:opacity-50 self-start sm:self-auto"
             >
               <Plus className="h-3.5 w-3.5" />
               <span>Propose Use</span>
             </button>
+          </div>
+
+          {/* AI Advisory Disclaimer Banner */}
+          <div className="p-3 rounded-xl bg-indigo-950/40 border border-indigo-800/80 text-indigo-300 text-xs flex items-center space-x-2.5">
+            <Info className="h-4 w-4 text-indigo-400 flex-shrink-0" />
+            <p>
+              <strong>AI Advisory Notice:</strong> Comparison engine findings are advisory and informational only. Human editorial reviews govern all legal and ethical clearances.
+            </p>
           </div>
 
           {proposedUses.length === 0 ? (
@@ -807,7 +974,7 @@ export default function ProjectWorkspacePage() {
             </div>
           )}
 
-          {/* Advisory findings drawer / modal if loaded */}
+          {/* Advisory findings drawer if loaded */}
           {selectedUseFindings && (
             <div className="p-5 rounded-xl border border-indigo-900/60 bg-indigo-950/20 space-y-3">
               <div className="flex items-center justify-between">
@@ -854,6 +1021,14 @@ export default function ProjectWorkspacePage() {
             <h2 className="text-base font-bold text-white">Human Review Queue</h2>
             <p className="text-xs text-slate-400">
               Only authorized staff can make binding decisions. Automated agents can never approve or decline uses.
+            </p>
+          </div>
+
+          {/* Ethical Disclaimer */}
+          <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-800/80 text-amber-300 text-xs flex items-center space-x-2.5">
+            <Info className="h-4 w-4 text-amber-400 flex-shrink-0" />
+            <p>
+              <strong>Human Authority Gate:</strong> AI recommendations are advisory only. A written rationale is mandatory for every human approval, modification, or decline decision.
             </p>
           </div>
 
@@ -910,31 +1085,36 @@ export default function ProjectWorkspacePage() {
                           <div className="flex flex-wrap gap-2 justify-end">
                             <button
                               onClick={() => setDecidingReviewId(null)}
+                              disabled={decidingReviewSubmitting}
                               className="px-3 py-1.5 rounded bg-slate-800 text-slate-400 text-xs font-semibold"
                             >
                               Cancel
                             </button>
                             <button
                               onClick={() => handleRecordReviewDecision(rev, 'approve')}
-                              className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold"
+                              disabled={decidingReviewSubmitting || !decisionReason.trim()}
+                              className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold disabled:opacity-50"
                             >
                               Approve
                             </button>
                             <button
                               onClick={() => handleRecordReviewDecision(rev, 'request_changes')}
-                              className="px-3 py-1.5 rounded bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold"
+                              disabled={decidingReviewSubmitting || !decisionReason.trim()}
+                              className="px-3 py-1.5 rounded bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold disabled:opacity-50"
                             >
                               Request Changes
                             </button>
                             <button
                               onClick={() => handleRecordReviewDecision(rev, 'decline')}
-                              className="px-3 py-1.5 rounded bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold"
+                              disabled={decidingReviewSubmitting || !decisionReason.trim()}
+                              className="px-3 py-1.5 rounded bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold disabled:opacity-50"
                             >
                               Decline Use
                             </button>
                             <button
                               onClick={() => handleRecordReviewDecision(rev, 'needs_participant_discussion')}
-                              className="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold"
+                              disabled={decidingReviewSubmitting || !decisionReason.trim()}
+                              className="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold disabled:opacity-50"
                             >
                               Needs Discussion
                             </button>
@@ -963,18 +1143,41 @@ export default function ProjectWorkspacePage() {
       {/* Tab 7: Tasks */}
       {activeTab === 'tasks' && (
         <div className="space-y-4">
-          <div>
-            <h2 className="text-base font-bold text-white">Actionable Tasks</h2>
-            <p className="text-xs text-slate-400">Assigned follow-ups, participant clarification needs, and legal addenda.</p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base font-bold text-white">Actionable Tasks</h2>
+              <p className="text-xs text-slate-400">Assigned follow-ups, participant clarification needs, and legal addenda.</p>
+            </div>
+
+            {/* Task Status Filter Pills */}
+            <div className="flex items-center space-x-1 bg-slate-900 border border-slate-800 rounded-lg p-1 text-xs self-start sm:self-auto">
+              {(['all', 'open', 'completed', 'urgent'] as const).map((filter) => (
+                <button
+                  key={filter}
+                  onClick={() => setTaskStatusFilter(filter)}
+                  className={`px-2.5 py-1 rounded font-medium capitalize transition ${
+                    taskStatusFilter === filter
+                      ? 'bg-emerald-600 text-white'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {filter}
+                </button>
+              ))}
+            </div>
           </div>
 
           {tasks.length === 0 ? (
             <div className="p-8 text-center rounded-xl border border-dashed border-slate-800 text-slate-500 text-xs">
               No outstanding tasks for this project.
             </div>
+          ) : filteredTasks.length === 0 ? (
+            <div className="p-8 text-center rounded-xl border border-slate-800 bg-slate-900/20 text-slate-400 text-xs">
+              No tasks match filter &ldquo;{taskStatusFilter}&rdquo;.
+            </div>
           ) : (
             <div className="space-y-2">
-              {tasks.map((task) => (
+              {filteredTasks.map((task) => (
                 <div
                   key={task.id}
                   className="p-4 rounded-xl border border-slate-800 bg-slate-900/40 flex items-center justify-between hover:bg-slate-900/60 transition"
@@ -987,6 +1190,7 @@ export default function ProjectWorkspacePage() {
                           ? 'bg-emerald-600 border-emerald-500 text-white'
                           : 'border-slate-600 hover:border-emerald-400'
                       }`}
+                      aria-label="Toggle task completion"
                     >
                       {(task.status === 'completed' || task.status === 'done') && <CheckCircle2 className="h-3.5 w-3.5" />}
                     </button>
@@ -1058,16 +1262,31 @@ export default function ProjectWorkspacePage() {
                       {commContent}
                     </p>
 
-                    {commStatus === 'draft' && (
-                      <div className="flex justify-end pt-1">
+                    <div className="flex items-center justify-between pt-1">
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(commContent);
+                          success('Approved message copied to clipboard!');
+                        }}
+                        className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-slate-700 transition"
+                      >
+                        <Copy className="h-3 w-3" />
+                        <span>Copy Text</span>
+                      </button>
+
+                      {commStatus === 'draft' ? (
                         <button
                           onClick={() => handleApproveCommunication(c)}
                           className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition"
                         >
                           Approve &amp; Authorize Message
                         </button>
-                      </div>
-                    )}
+                      ) : (
+                        <span className="text-[11px] text-slate-400 italic">
+                          Approved for dispatch via production external channel
+                        </span>
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -1115,15 +1334,28 @@ export default function ProjectWorkspacePage() {
 
       {/* Modal: Add Participant */}
       {showAddParticipant && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="add-participant-modal-title"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
+        >
           <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6 space-y-4 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-base font-bold text-white flex items-center space-x-2">
+              <h3 id="add-participant-modal-title" className="text-base font-bold text-white flex items-center space-x-2">
                 <Users className="h-5 w-5 text-emerald-400" />
                 <span>Register Participant</span>
               </h3>
-              <button onClick={() => setShowAddParticipant(false)} className="text-slate-400 hover:text-white">✕</button>
+              <button onClick={() => setShowAddParticipant(false)} className="text-slate-400 hover:text-white p-1" aria-label="Close dialog">✕</button>
             </div>
+
+            {partError && (
+              <div className="p-3 rounded-lg bg-rose-950/80 border border-rose-800 text-rose-300 text-xs flex items-center space-x-2">
+                <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                <span>{partError}</span>
+              </div>
+            )}
+
             <form onSubmit={handleCreateParticipant} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1">Display Name *</label>
@@ -1167,10 +1399,10 @@ export default function ProjectWorkspacePage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={!newPartName.trim()}
+                  disabled={!newPartName.trim() || submittingPart}
                   className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold disabled:opacity-50"
                 >
-                  Save Participant
+                  {submittingPart ? 'Saving...' : 'Save Participant'}
                 </button>
               </div>
             </form>
@@ -1180,15 +1412,28 @@ export default function ProjectWorkspacePage() {
 
       {/* Modal: Record Consent */}
       {showAddConsent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm overflow-y-auto">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="record-consent-modal-title"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm overflow-y-auto"
+        >
           <div className="w-full max-w-2xl rounded-2xl border border-slate-700 bg-slate-900 p-6 space-y-4 shadow-2xl my-8">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-base font-bold text-white flex items-center space-x-2">
+              <h3 id="record-consent-modal-title" className="text-base font-bold text-white flex items-center space-x-2">
                 <FileCheck className="h-5 w-5 text-emerald-400" />
                 <span>Record Consent Form</span>
               </h3>
-              <button onClick={() => setShowAddConsent(false)} className="text-slate-400 hover:text-white">✕</button>
+              <button onClick={() => setShowAddConsent(false)} className="text-slate-400 hover:text-white p-1" aria-label="Close dialog">✕</button>
             </div>
+
+            {consentError && (
+              <div className="p-3 rounded-lg bg-rose-950/80 border border-rose-800 text-rose-300 text-xs flex items-center space-x-2">
+                <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                <span>{consentError}</span>
+              </div>
+            )}
+
             <form onSubmit={handleCreateConsent} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -1261,9 +1506,10 @@ export default function ProjectWorkspacePage() {
                 </button>
                 <button
                   type="submit"
-                  className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold"
+                  disabled={submittingConsent}
+                  className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold disabled:opacity-50"
                 >
-                  Save Consent Record
+                  {submittingConsent ? 'Saving...' : 'Save Consent Record'}
                 </button>
               </div>
             </form>
@@ -1273,15 +1519,28 @@ export default function ProjectWorkspacePage() {
 
       {/* Modal: Propose Use */}
       {showAddProposedUse && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="propose-use-modal-title"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
+        >
           <div className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-6 space-y-4 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-base font-bold text-white flex items-center space-x-2">
+              <h3 id="propose-use-modal-title" className="text-base font-bold text-white flex items-center space-x-2">
                 <GitCompare className="h-5 w-5 text-emerald-400" />
                 <span>Propose Footage / Likeness Use</span>
               </h3>
-              <button onClick={() => setShowAddProposedUse(false)} className="text-slate-400 hover:text-white">✕</button>
+              <button onClick={() => setShowAddProposedUse(false)} className="text-slate-400 hover:text-white p-1" aria-label="Close dialog">✕</button>
             </div>
+
+            {useError && (
+              <div className="p-3 rounded-lg bg-rose-950/80 border border-rose-800 text-rose-300 text-xs flex items-center space-x-2">
+                <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                <span>{useError}</span>
+              </div>
+            )}
+
             <form onSubmit={handleCreateProposedUse} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -1340,9 +1599,10 @@ export default function ProjectWorkspacePage() {
                 </button>
                 <button
                   type="submit"
-                  className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold"
+                  disabled={submittingUse}
+                  className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold disabled:opacity-50"
                 >
-                  Submit &amp; Run Comparison Engine
+                  {submittingUse ? 'Evaluating...' : 'Submit & Run Comparison Engine'}
                 </button>
               </div>
             </form>
@@ -1352,15 +1612,28 @@ export default function ProjectWorkspacePage() {
 
       {/* Modal: Upload Release Document */}
       {showUploadDoc && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="upload-doc-modal-title"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
+        >
           <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6 space-y-4 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 className="text-base font-bold text-white flex items-center space-x-2">
+              <h3 id="upload-doc-modal-title" className="text-base font-bold text-white flex items-center space-x-2">
                 <Upload className="h-5 w-5 text-emerald-400" />
                 <span>Upload Release Agreement</span>
               </h3>
-              <button onClick={() => setShowUploadDoc(false)} className="text-slate-400 hover:text-white">✕</button>
+              <button onClick={() => setShowUploadDoc(false)} className="text-slate-400 hover:text-white p-1" aria-label="Close dialog">✕</button>
             </div>
+
+            {docError && (
+              <div className="p-3 rounded-lg bg-rose-950/80 border border-rose-800 text-rose-300 text-xs flex items-center space-x-2">
+                <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                <span>{docError}</span>
+              </div>
+            )}
+
             <form onSubmit={handleUploadDocument} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1">Participant *</label>
@@ -1403,6 +1676,40 @@ export default function ProjectWorkspacePage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* OCR Text Preview Modal */}
+      {ocrModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="ocr-preview-modal-title"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
+        >
+          <div className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 id="ocr-preview-modal-title" className="text-base font-bold text-white flex items-center space-x-2">
+                <FileText className="h-5 w-5 text-emerald-400" />
+                <span>Extracted Text: {ocrDocName}</span>
+              </h3>
+              <button onClick={() => setOcrModalOpen(false)} className="text-slate-400 hover:text-white p-1" aria-label="Close dialog">✕</button>
+            </div>
+
+            <div className="max-h-80 overflow-y-auto p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-300 font-mono whitespace-pre-wrap leading-relaxed">
+              {ocrText}
+            </div>
+
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setOcrModalOpen(false)}
+                className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold"
+              >
+                Close Preview
+              </button>
+            </div>
           </div>
         </div>
       )}

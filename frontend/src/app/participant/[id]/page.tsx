@@ -24,6 +24,7 @@ import {
   CANONICAL_CATEGORIES 
 } from '@/lib/api';
 import { ChoiceBadge } from '@/components/ConsentBadge';
+import { useToast } from '@/components/Toast';
 
 type Language = 'en' | 'hi';
 
@@ -157,6 +158,7 @@ export default function ParticipantPortalPage() {
   const [lang, setLang] = useState<Language>('en');
   const t = DICTIONARY[lang];
 
+  const { success, error: toastError } = useToast();
   const [participant, setParticipant] = useState<Participant | null>(null);
   const [consents, setConsents] = useState<ConsentRecord[]>([]);
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
@@ -169,6 +171,7 @@ export default function ParticipantPortalPage() {
   const [messageText, setMessageText] = useState('');
   const [submittedMessage, setSubmittedMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadData() {
@@ -205,8 +208,12 @@ export default function ParticipantPortalPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!messageText.trim()) return;
+    if (!messageText.trim()) {
+      setFormError('Please enter your question or notice before submitting.');
+      return;
+    }
     setSubmitting(true);
+    setFormError(null);
     try {
       const res = await api.submitClarificationRequest(
         participantId,
@@ -217,10 +224,13 @@ export default function ParticipantPortalPage() {
         },
         token || undefined,
       );
-      setSubmittedMessage(res.message || (formMode === 'withdrawal' ? t.submissionSuccessWithdrawal : t.submissionSuccessQuestion));
+      const msg = res.message || (formMode === 'withdrawal' ? t.submissionSuccessWithdrawal : t.submissionSuccessQuestion);
+      setSubmittedMessage(msg);
+      success(msg);
       setMessageText('');
     } catch (err: any) {
-      alert(`Submission failed: ${err.message}`);
+      setFormError(err.message || 'Submission failed');
+      toastError(err.message || 'Submission failed');
     } finally {
       setSubmitting(false);
     }
@@ -422,6 +432,12 @@ export default function ParticipantPortalPage() {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
+            {formError && (
+              <div className="p-3 rounded-lg bg-rose-950/80 border border-rose-800 text-rose-300 text-xs flex items-center space-x-2">
+                <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                <span>{formError}</span>
+              </div>
+            )}
             <div>
               <label className="block text-xs font-medium text-slate-400 mb-1">
                 {t.categoriesHeader}
