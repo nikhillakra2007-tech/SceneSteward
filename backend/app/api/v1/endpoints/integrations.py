@@ -52,6 +52,35 @@ def integrations_status() -> IntegrationHealthResponse:
             detail="supabase JWKS" + (" (jwks url derived)" if not s.auth_jwks_url else ""),
         ))
 
-    # Redis is optional and only used if REDIS_URL is set (not part of required env).
-    items.append(IntegrationStatus(name="redis", status="not_configured", detail="optional; rate limiting runs in-process"))
+    # Redis: distributed rate limiting and token cache
+    if s.redis_url:
+        try:
+            from app.core.rate_limiter import get_rate_limiter
+            limiter = get_rate_limiter(s.redis_url)
+            if limiter._redis_available and limiter.redis_client is not None:
+                limiter.redis_client.ping()
+                items.append(IntegrationStatus(name="redis", status="configured_verified", detail="connected; distributed rate limiter active"))
+            else:
+                items.append(IntegrationStatus(name="redis", status="unavailable", detail="connection failed; fallback to in_memory"))
+        except Exception:  # noqa: BLE001
+            items.append(IntegrationStatus(name="redis", status="unavailable", detail="connection error; fallback to in_memory"))
+    else:
+        items.append(IntegrationStatus(name="redis", status="not_configured", detail="optional; rate limiting runs in-process"))
+
+    # Antivirus / Malware scanning
+    if s.antivirus_provider == "clamav":
+        try:
+            from app.services.malware_scanner import ping_clamav
+            clamav_ok = ping_clamav(s.clamav_host, s.clamav_port, timeout=2.0)
+            if clamav_ok:
+                items.append(IntegrationStatus(name="antivirus", status="configured_verified", detail="clamav daemon responsive"))
+            else:
+                items.append(IntegrationStatus(name="antivirus", status="unavailable", detail="clamav daemon unreachable"))
+        except Exception:  # noqa: BLE001
+            items.append(IntegrationStatus(name="antivirus", status="unavailable", detail="clamav probe failed"))
+    elif s.antivirus_provider == "noop":
+        items.append(IntegrationStatus(name="antivirus", status="configured_unverified", detail="noop scanner (dev/test only)"))
+    else:
+        items.append(IntegrationStatus(name="antivirus", status="not_configured", detail=f"provider: {s.antivirus_provider}"))
+
     return IntegrationHealthResponse(integrations=items)
