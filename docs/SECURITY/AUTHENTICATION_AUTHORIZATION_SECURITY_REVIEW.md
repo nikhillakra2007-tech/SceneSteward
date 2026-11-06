@@ -107,3 +107,4 @@ with system_context(db):
 2. **Participant Token Mismatch:** Mismatched `sub` returns HTTP 403; mismatched `project_id` returns HTTP 404.
 3. **Cross-Tenant Staff Access:** Authenticated users from outside the project receive HTTP 404, preventing cross-tenant information leakage.
 4. **Audit Trail Authenticity:** The audit record strictly identifies `actor_id="participant_token"` or `actor_id=f"user:{user.id}"`.
+

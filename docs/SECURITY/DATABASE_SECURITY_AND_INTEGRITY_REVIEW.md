@@ -71,3 +71,4 @@ When using pooled database connections, transaction-scoped session parameters (`
 - `clear_identity(session=db)` resets context.
 - `system_context(session=db)` is a Python context manager guaranteeing that `app.system` is reset to `'off'` on block exit, even if an unhandled exception occurs.
 - Verified in `backend/tests/security/test_production_hardening.py`.
+

@@ -96,3 +96,4 @@ erDiagram
 | **Phase 3.2** | REST API Endpoints | `/api/v1/projects/{id}/analytics/overview`, `/api/v1/projects/{id}/analytics/consent-distribution`, and `/api/v1/projects/{id}/analytics/review-metrics`. |
 | **Phase 3.3** | Frontend Visualizations | Next.js interactive charts (Chart.js / SVG dashboards) displaying consent category coverage, pending human review queues, and agent alignment trends. |
 | **Phase 3.4** | Export & Compliance Reporting | PDF/CSV compliance export generation for documentary film distributors, legal clearance teams, and festival submissions. |
+

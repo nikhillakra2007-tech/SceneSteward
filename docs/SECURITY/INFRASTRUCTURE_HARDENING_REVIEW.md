@@ -58,3 +58,4 @@ The repository continuous integration pipeline (`.github/workflows/ci.yml`) enfo
   1. `backend-lint-and-test`: Sets up PostgreSQL 16 container, bootstraps strict roles (`scenesteward_app`, `scenesteward_readonly`), runs Alembic migrations, runs Ruff linting, runs full 276-test Pytest suite, and executes 8-step documentary lifecycle verification.
   2. `frontend-build`: Installs dependencies via `npm ci` and compiles production Next.js build.
   3. `docker-preflight`: Validates syntax of both Staging and Production Compose configurations, tests compilation of `backend/Dockerfile`, and tests compilation of `frontend/Dockerfile`.
+

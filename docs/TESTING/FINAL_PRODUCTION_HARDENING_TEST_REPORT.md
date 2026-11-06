@@ -67,3 +67,4 @@ All tests executed against an active PostgreSQL 16 database running with real Ro
 
 - **Command:** `ruff check backend`
 - **Result:** `All checks passed!` (0 lint errors, import blocks sorted).
+

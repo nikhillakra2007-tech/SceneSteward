@@ -100,3 +100,4 @@ The test suite in `backend/tests/security/test_trust_boundary.py` and `backend/t
 ## 4. Verdict
 
 Multi-tenant isolation in SceneSteward has been thoroughly validated. The combination of application-level membership checks and database-level RLS policies provides robust defense in depth.
+

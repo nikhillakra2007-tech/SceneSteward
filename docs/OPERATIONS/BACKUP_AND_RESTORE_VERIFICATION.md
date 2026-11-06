@@ -83,3 +83,4 @@ Automated restore procedures confirm that PostgreSQL backups preserve:
 - Cryptographic identity secrets in `private.app_secrets`.
 - All database-level triggers enforcing consent and audit immutability.
 - RLS policies and table privilege grants.
+
