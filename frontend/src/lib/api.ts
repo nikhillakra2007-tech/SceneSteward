@@ -640,4 +640,130 @@ export const api = {
   async getMetrics(): Promise<any> {
     return apiFetch('/api/v1/metrics');
   },
+
+  // Analytics Engine
+  async getAnalyticsOverview(params?: {
+    project_id?: string;
+    start_date?: string;
+    end_date?: string;
+  }): Promise<import('./analytics-types').AnalyticsOverview> {
+    const query = new URLSearchParams();
+    if (params?.project_id) query.set('project_id', params.project_id);
+    if (params?.start_date) query.set('start_date', params.start_date);
+    if (params?.end_date) query.set('end_date', params.end_date);
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    return apiFetch(`/api/v1/analytics/overview${qs}`);
+  },
+
+  async getProjectsAnalyticsSummary(): Promise<import('./analytics-types').ProjectAnalyticsSummary[]> {
+    return apiFetch('/api/v1/analytics/projects');
+  },
+
+  async getConsentAnalytics(params?: {
+    project_id?: string;
+    start_date?: string;
+    end_date?: string;
+    category?: string;
+  }): Promise<import('./analytics-types').ConsentAnalytics> {
+    const query = new URLSearchParams();
+    if (params?.project_id) query.set('project_id', params.project_id);
+    if (params?.start_date) query.set('start_date', params.start_date);
+    if (params?.end_date) query.set('end_date', params.end_date);
+    if (params?.category) query.set('category', params.category);
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    return apiFetch(`/api/v1/analytics/consent${qs}`);
+  },
+
+  async getConsentCategoriesBreakdown(params?: {
+    project_id?: string;
+    start_date?: string;
+    end_date?: string;
+  }): Promise<import('./analytics-types').CategoryMetricDetail[]> {
+    const query = new URLSearchParams();
+    if (params?.project_id) query.set('project_id', params.project_id);
+    if (params?.start_date) query.set('start_date', params.start_date);
+    if (params?.end_date) query.set('end_date', params.end_date);
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    return apiFetch(`/api/v1/analytics/consent/categories${qs}`);
+  },
+
+  async getReviewAnalytics(params?: {
+    project_id?: string;
+    start_date?: string;
+    end_date?: string;
+  }): Promise<import('./analytics-types').ReviewAnalytics> {
+    const query = new URLSearchParams();
+    if (params?.project_id) query.set('project_id', params.project_id);
+    if (params?.start_date) query.set('start_date', params.start_date);
+    if (params?.end_date) query.set('end_date', params.end_date);
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    return apiFetch(`/api/v1/analytics/reviews${qs}`);
+  },
+
+  async getOperationsAnalytics(params?: {
+    project_id?: string;
+    start_date?: string;
+    end_date?: string;
+  }): Promise<import('./analytics-types').OperationsAnalytics> {
+    const query = new URLSearchParams();
+    if (params?.project_id) query.set('project_id', params.project_id);
+    if (params?.start_date) query.set('start_date', params.start_date);
+    if (params?.end_date) query.set('end_date', params.end_date);
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    return apiFetch(`/api/v1/analytics/operations${qs}`);
+  },
+
+  async getWithdrawalAnalytics(params?: {
+    project_id?: string;
+    start_date?: string;
+    end_date?: string;
+  }): Promise<import('./analytics-types').WithdrawalAnalytics> {
+    const query = new URLSearchParams();
+    if (params?.project_id) query.set('project_id', params.project_id);
+    if (params?.start_date) query.set('start_date', params.start_date);
+    if (params?.end_date) query.set('end_date', params.end_date);
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    return apiFetch(`/api/v1/analytics/withdrawals${qs}`);
+  },
+
+  async getAdvisoryAnalytics(params?: {
+    project_id?: string;
+    start_date?: string;
+    end_date?: string;
+  }): Promise<import('./analytics-types').AdvisoryAnalytics> {
+    const query = new URLSearchParams();
+    if (params?.project_id) query.set('project_id', params.project_id);
+    if (params?.start_date) query.set('start_date', params.start_date);
+    if (params?.end_date) query.set('end_date', params.end_date);
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    return apiFetch(`/api/v1/analytics/advisory${qs}`);
+  },
+
+  async getTrendsAnalytics(params?: {
+    project_id?: string;
+    start_date?: string;
+    end_date?: string;
+    interval?: 'day' | 'week' | 'month';
+  }): Promise<import('./analytics-types').TrendsAnalytics> {
+    const query = new URLSearchParams();
+    if (params?.project_id) query.set('project_id', params.project_id);
+    if (params?.start_date) query.set('start_date', params.start_date);
+    if (params?.end_date) query.set('end_date', params.end_date);
+    if (params?.interval) query.set('interval', params.interval);
+    const qs = query.toString() ? `?${query.toString()}` : '';
+    return apiFetch(`/api/v1/analytics/trends${qs}`);
+  },
+
+  async exportAnalytics(payload: {
+    project_id?: string;
+    report_type: string;
+    format: 'csv' | 'json';
+    start_date?: string;
+    end_date?: string;
+  }): Promise<import('./analytics-types').ExportResponse> {
+    return apiFetch('/api/v1/analytics/exports', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
 };
