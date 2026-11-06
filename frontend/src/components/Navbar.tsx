@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ShieldCheck, Film, LogOut, UserCircle, LogIn, ArrowRightLeft, X } from 'lucide-react';
+import { ShieldCheck, Film, BarChart3, LogOut, UserCircle, LogIn, ArrowRightLeft, X } from 'lucide-react';
 import { api, getAuthToken, User } from '@/lib/api';
 
 const ROLE_PRESETS = [
@@ -91,6 +91,19 @@ export function Navbar() {
                   <div className="flex items-center space-x-1.5">
                     <Film className="h-4 w-4" />
                     <span>Projects</span>
+                  </div>
+                </Link>
+                <Link
+                  href="/analytics"
+                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition ${
+                    pathname?.startsWith('/analytics')
+                      ? 'bg-slate-800 text-emerald-400'
+                      : 'text-slate-300 hover:text-slate-100 hover:bg-slate-800/50'
+                  }`}
+                >
+                  <div className="flex items-center space-x-1.5">
+                    <BarChart3 className="h-4 w-4" />
+                    <span>Analytics</span>
                   </div>
                 </Link>
               </nav>
