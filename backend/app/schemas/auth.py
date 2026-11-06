@@ -32,7 +32,7 @@ class LogoutResponse(BaseModel):
 
 class DevTokenRequest(BaseModel):
     email: EmailStr
-    name: str = "Test User"
+    name: str = Field(default="Test User", min_length=1, max_length=200)
 
 
 class TokenResponse(BaseModel):

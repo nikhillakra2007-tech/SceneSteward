@@ -15,7 +15,7 @@ from app.api.dependencies import (
     get_project,
 )
 from app.core import permissions
-from app.core.exceptions import ConflictError, NotFoundError, PermissionDenied
+from app.core.exceptions import ConflictError, NotFoundError, PermissionDenied, Unauthenticated
 from app.core.security import (
     decode_participant_token,
     decrypt_secret,
@@ -304,22 +304,33 @@ def submit_clarification_request(
     """Submit a clarification or consent modification request from the participant portal."""
     from app.core.database import system_context
 
-    actor_desc = "participant_token"
+    actor_desc: str
+    claims = None
+    user = None
     if token:
         claims = decode_participant_token(token)
         if claims.get("sub") != str(participant_id):
             raise PermissionDenied("Token does not match this participant")
+        actor_desc = "participant_token"
     elif authorization and authorization.lower().startswith("bearer "):
         from app.api.dependencies import get_current_user
         user = get_current_user(db, authorization)
         actor_desc = f"user:{user.id}"
     else:
-        actor_desc = "participant_direct"
+        raise Unauthenticated("Participant token or bearer authorization required")
 
     with system_context(db):
         participant = db.get(Participant, participant_id)
         if participant is None:
             raise NotFoundError("Participant not found")
+
+        if claims is not None:
+            if str(participant.project_id) != claims.get("project_id"):
+                raise NotFoundError("Participant not found")
+        elif user is not None:
+            membership = get_membership(db, participant.project_id, user)
+            if membership is None:
+                raise NotFoundError("Participant not found")
 
         is_withdrawal = (payload.request_type == "withdrawal") or ("withdraw" in payload.concern.lower())
         task_priority = "urgent" if is_withdrawal else "high"

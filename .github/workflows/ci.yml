@@ -174,3 +174,7 @@ jobs:
       - name: Test Backend Container Build
         run: |
           docker build -t scenesteward-backend:ci -f backend/Dockerfile .
+
+      - name: Test Frontend Container Build
+        run: |
+          docker build -t scenesteward-frontend:ci -f frontend/Dockerfile .
