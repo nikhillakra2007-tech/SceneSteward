@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ShieldCheck, Film, BarChart3, LogOut, UserCircle, LogIn, ArrowRightLeft, X } from 'lucide-react';
+import { ShieldCheck, Film, BarChart3, LogOut, UserCircle, LogIn, ArrowRightLeft, X, Menu } from 'lucide-react';
 import { api, getAuthToken, User } from '@/lib/api';
+import { useToast } from '@/components/Toast';
 
 const ROLE_PRESETS = [
   { label: 'Olivia (Director / Owner)', email: 'olivia@example.com', name: 'Olivia Director' },
@@ -15,14 +16,16 @@ const ROLE_PRESETS = [
 
 export function Navbar() {
   const pathname = usePathname();
+  const { success, error: toastError, info } = useToast();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [customEmail, setCustomEmail] = useState('');
   const [customName, setCustomName] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
 
-  const fetchUser = async () => {
+  const fetchUser = useCallback(async () => {
     if (!getAuthToken()) {
       setCurrentUser(null);
       return;
@@ -33,11 +36,24 @@ export function Navbar() {
     } catch {
       setCurrentUser(null);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchUser();
-  }, [pathname]);
+    setMobileMenuOpen(false);
+  }, [pathname, fetchUser]);
+
+  // Handle escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (modalOpen) setModalOpen(false);
+        if (mobileMenuOpen) setMobileMenuOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [modalOpen, mobileMenuOpen]);
 
   const handleDevLogin = async (email: string, name: string) => {
     setLoading(true);
@@ -48,8 +64,10 @@ export function Navbar() {
       setModalOpen(false);
       setCustomEmail('');
       setCustomName('');
+      success(`Signed in as ${name}`);
     } catch (err: any) {
       setAuthError(err.message || 'Login failed');
+      toastError(err.message || 'Login failed');
     } finally {
       setLoading(false);
     }
@@ -58,12 +76,13 @@ export function Navbar() {
   const handleLogout = () => {
     api.logout();
     setCurrentUser(null);
+    info('Signed out successfully');
     window.location.href = '/';
   };
 
   return (
     <>
-      <header className="border-b border-slate-800 bg-slate-900/90 backdrop-blur sticky top-0 z-50">
+      <header className="border-b border-slate-800 bg-slate-900/90 backdrop-blur sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-6">
@@ -74,12 +93,12 @@ export function Navbar() {
                 <div>
                   <span className="text-base font-bold text-slate-100 tracking-tight">SceneSteward</span>
                   <span className="hidden sm:inline-block ml-2 text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
-                    Documentary Ethics & Consent
+                    Documentary Ethics &amp; Consent
                   </span>
                 </div>
               </Link>
 
-              <nav className="hidden md:flex space-x-1">
+              <nav className="hidden md:flex space-x-1" aria-label="Main Navigation">
                 <Link
                   href="/projects"
                   className={`px-3 py-1.5 rounded-md text-sm font-medium transition ${
@@ -149,7 +168,7 @@ export function Navbar() {
                     disabled={loading}
                     data-testid="quick-login-claire"
                     onClick={() => handleDevLogin('claire@example.com', 'Claire Care')}
-                    className="text-xs px-2.5 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-medium transition disabled:opacity-50"
+                    className="text-xs px-2.5 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-medium transition disabled:opacity-50 hidden sm:inline-block"
                   >
                     Claire (Care)
                   </button>
@@ -159,13 +178,60 @@ export function Navbar() {
                     className="text-xs px-2.5 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-emerald-500/40 font-medium transition flex items-center gap-1.5"
                   >
                     <LogIn className="h-3.5 w-3.5" />
-                    <span>Custom / Switch</span>
+                    <span className="hidden sm:inline">Custom / Switch</span>
+                    <span className="sm:hidden">Login</span>
                   </button>
                 </div>
               )}
+
+              {/* Mobile Menu Hamburger Button */}
+              <button
+                type="button"
+                onClick={() => setMobileMenuOpen((prev) => !prev)}
+                className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition md:hidden"
+                aria-label="Toggle navigation menu"
+                aria-expanded={mobileMenuOpen}
+              >
+                {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+              </button>
             </div>
           </div>
         </div>
+
+        {/* Mobile Navigation Drawer */}
+        {mobileMenuOpen && (
+          <div className="md:hidden border-t border-slate-800 bg-slate-900/95 backdrop-blur px-4 pt-3 pb-4 space-y-2 animate-in slide-in-from-top-2">
+            <Link
+              href="/projects"
+              onClick={() => setMobileMenuOpen(false)}
+              className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition ${
+                pathname?.startsWith('/projects')
+                  ? 'bg-slate-800 text-emerald-400 font-semibold'
+                  : 'text-slate-300 hover:bg-slate-800/60'
+              }`}
+            >
+              <Film className="h-4 w-4" />
+              <span>Projects</span>
+            </Link>
+            <Link
+              href="/analytics"
+              onClick={() => setMobileMenuOpen(false)}
+              className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition ${
+                pathname?.startsWith('/analytics')
+                  ? 'bg-slate-800 text-emerald-400 font-semibold'
+                  : 'text-slate-300 hover:bg-slate-800/60'
+              }`}
+            >
+              <BarChart3 className="h-4 w-4" />
+              <span>Analytics</span>
+            </Link>
+            {currentUser && (
+              <div className="pt-2 border-t border-slate-800 text-xs text-slate-400 px-3">
+                Signed in as <span className="text-slate-200 font-semibold">{currentUser.full_name}</span> ({currentUser.email})
+              </div>
+            )}
+          </div>
+        )}
       </header>
 
       {/* Identity Switching & Registration Modal */}
@@ -174,19 +240,21 @@ export function Navbar() {
           data-testid="auth-modal"
           role="dialog"
           aria-modal="true"
+          aria-labelledby="auth-modal-title"
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
         >
           <div className="relative w-full max-w-md rounded-xl bg-slate-900 border border-slate-700 p-6 shadow-2xl">
             <div className="flex items-center justify-between pb-4 border-b border-slate-800">
               <div className="flex items-center gap-2">
                 <UserCircle className="h-5 w-5 text-emerald-400" />
-                <h3 className="text-base font-semibold text-slate-100">
+                <h3 id="auth-modal-title" className="text-base font-semibold text-slate-100">
                   {currentUser ? 'Switch User / Persona' : 'Sign In or Register'}
                 </h3>
               </div>
               <button
                 onClick={() => setModalOpen(false)}
-                className="text-slate-400 hover:text-slate-200 transition"
+                className="text-slate-400 hover:text-slate-200 transition p-1"
+                aria-label="Close dialog"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -239,8 +307,9 @@ export function Navbar() {
               className="space-y-3"
             >
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Full Name</label>
+                <label htmlFor="login-name-input" className="block text-xs font-medium text-slate-300 mb-1">Full Name</label>
                 <input
+                  id="login-name-input"
                   type="text"
                   required
                   data-testid="login-name-input"
@@ -252,8 +321,9 @@ export function Navbar() {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Email Address</label>
+                <label htmlFor="login-email-input" className="block text-xs font-medium text-slate-300 mb-1">Email Address</label>
                 <input
+                  id="login-email-input"
                   type="email"
                   required
                   data-testid="login-email-input"

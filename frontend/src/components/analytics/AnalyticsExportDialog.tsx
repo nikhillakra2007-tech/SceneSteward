@@ -17,6 +17,16 @@ export function AnalyticsExportDialog({ isOpen, onClose, projectId }: AnalyticsE
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const handleDownload = async () => {
@@ -56,11 +66,17 @@ export function AnalyticsExportDialog({ isOpen, onClose, projectId }: AnalyticsE
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="export-dialog-title"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm"
+    >
       <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-6 shadow-2xl relative">
         <button
           onClick={onClose}
           className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition"
+          aria-label="Close export dialog"
         >
           <X className="h-4 w-4" />
         </button>
@@ -70,7 +86,7 @@ export function AnalyticsExportDialog({ isOpen, onClose, projectId }: AnalyticsE
             <FileText className="h-5 w-5" />
           </div>
           <div>
-            <h3 className="text-base font-semibold text-slate-100">Export Analytics Report</h3>
+            <h3 id="export-dialog-title" className="text-base font-semibold text-slate-100">Export Analytics Report</h3>
             <p className="text-xs text-slate-400">Download immutable audit-verified reports</p>
           </div>
         </div>

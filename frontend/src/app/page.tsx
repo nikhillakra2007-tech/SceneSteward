@@ -75,7 +75,7 @@ export default function HomePage() {
               href="/projects"
               className="inline-flex items-center space-x-2 px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-sm transition shadow-lg shadow-emerald-950/50"
             >
-              <span>Explore Projects</span>
+              <span>View Projects</span>
               <ArrowRight className="h-4 w-4" />
             </Link>
 
