@@ -464,7 +464,7 @@ export default function ProjectWorkspacePage() {
   return (
     <div className="space-y-6">
       {/* Workspace Header */}
-      <div className="rounded-2xl border border-slate-800 bg-gradient-to-r from-slate-900 via-slate-900 to-slate-950 p-6 sm:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-xl">
+      <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6 sm:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="space-y-2 max-w-2xl">
           <div className="flex items-center space-x-2">
             <Link href="/projects" className="text-xs text-slate-400 hover:text-emerald-400 transition">
@@ -473,7 +473,7 @@ export default function ProjectWorkspacePage() {
             <span className="text-xs text-slate-600">/</span>
             <span className="text-xs text-emerald-400 font-semibold">{project.status}</span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">{project.title}</h1>
+          <h1 className="font-display text-3xl sm:text-4xl font-semibold text-slate-50 tracking-tight">{project.title}</h1>
           <p className="text-xs sm:text-sm text-slate-300">
             {project.description || project.purpose || 'Documentary consent coordination and participant care.'}
           </p>
@@ -573,22 +573,22 @@ export default function ProjectWorkspacePage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="p-5 rounded-xl border border-slate-800 bg-slate-900/40 space-y-1">
               <div className="text-xs text-slate-400">Total Participants</div>
-              <div className="text-2xl font-extrabold text-white">{participants.length}</div>
+              <div className="font-display text-3xl font-semibold text-slate-50">{participants.length}</div>
               <div className="text-[11px] text-emerald-400">Active roster members</div>
             </div>
             <div className="p-5 rounded-xl border border-slate-800 bg-slate-900/40 space-y-1">
               <div className="text-xs text-slate-400">Active Consents</div>
-              <div className="text-2xl font-extrabold text-white">{consents.length}</div>
+              <div className="font-display text-3xl font-semibold text-slate-50">{consents.length}</div>
               <div className="text-[11px] text-emerald-400">15 canonical categories tracked</div>
             </div>
             <div className="p-5 rounded-xl border border-slate-800 bg-slate-900/40 space-y-1">
               <div className="text-xs text-slate-400">Proposed Uses</div>
-              <div className="text-2xl font-extrabold text-white">{proposedUses.length}</div>
+              <div className="font-display text-3xl font-semibold text-slate-50">{proposedUses.length}</div>
               <div className="text-[11px] text-slate-400">Under continuous comparison</div>
             </div>
             <div className="p-5 rounded-xl border border-slate-800 bg-slate-900/40 space-y-1">
               <div className="text-xs text-slate-400">Pending Reviews</div>
-              <div className="text-2xl font-extrabold text-amber-400">
+              <div className="font-display text-3xl font-semibold text-amber-400">
                 {reviews.filter((r) => r.review_status === 'pending').length}
               </div>
               <div className="text-[11px] text-amber-500">Require human sign-off</div>
@@ -723,7 +723,7 @@ export default function ProjectWorkspacePage() {
         <div className="space-y-4">
           <div className="flex justify-between items-center">
             <div>
-              <h2 className="text-base font-bold text-white">Recorded Consents</h2>
+              <h2 className="font-display text-lg font-semibold text-slate-50">Recorded Consents</h2>
               <p className="text-xs text-slate-400">Canonical category matrix per participant agreement version.</p>
             </div>
             <button
@@ -811,7 +811,7 @@ export default function ProjectWorkspacePage() {
         <div className="space-y-4">
           <div className="flex justify-between items-center">
             <div>
-              <h2 className="text-base font-bold text-white">Release Documents</h2>
+              <h2 className="font-display text-lg font-semibold text-slate-50">Release Documents</h2>
               <p className="text-xs text-slate-400">Scanned agreements checked with ClamAV antivirus and encrypted at rest.</p>
             </div>
             <button
@@ -890,7 +890,7 @@ export default function ProjectWorkspacePage() {
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <h2 className="text-base font-bold text-white">Proposed Footage &amp; Likeness Uses</h2>
+              <h2 className="font-display text-lg font-semibold text-slate-50">Proposed Footage &amp; Likeness Uses</h2>
               <p className="text-xs text-slate-400">
                 Automated 63-case comparison engine identifies discrepancies, overreach, and unconsented syndication.
               </p>
@@ -1018,7 +1018,7 @@ export default function ProjectWorkspacePage() {
       {activeTab === 'reviews' && (
         <div className="space-y-4">
           <div>
-            <h2 className="text-base font-bold text-white">Human Review Queue</h2>
+            <h2 className="font-display text-lg font-semibold text-slate-50">Human Review Queue</h2>
             <p className="text-xs text-slate-400">
               Only authorized staff can make binding decisions. Automated agents can never approve or decline uses.
             </p>
@@ -1145,7 +1145,7 @@ export default function ProjectWorkspacePage() {
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <h2 className="text-base font-bold text-white">Actionable Tasks</h2>
+              <h2 className="font-display text-lg font-semibold text-slate-50">Actionable Tasks</h2>
               <p className="text-xs text-slate-400">Assigned follow-ups, participant clarification needs, and legal addenda.</p>
             </div>
 
@@ -1221,7 +1221,7 @@ export default function ProjectWorkspacePage() {
       {activeTab === 'communications' && (
         <div className="space-y-4">
           <div>
-            <h2 className="text-base font-bold text-white">Participant Care Communications</h2>
+            <h2 className="font-display text-lg font-semibold text-slate-50">Participant Care Communications</h2>
             <p className="text-xs text-slate-400">
               Draft messages require explicit human approval before they can be sent. The database enforces this via constraint.
             </p>
@@ -1299,7 +1299,7 @@ export default function ProjectWorkspacePage() {
       {activeTab === 'timeline' && (
         <div className="space-y-4">
           <div>
-            <h2 className="text-base font-bold text-white">Immutable Audit Timeline</h2>
+            <h2 className="font-display text-lg font-semibold text-slate-50">Immutable Audit Timeline</h2>
             <p className="text-xs text-slate-400">Cryptographically verifiable, keyset-paginated audit trail of all project events.</p>
           </div>
 
@@ -1342,7 +1342,7 @@ export default function ProjectWorkspacePage() {
         >
           <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6 space-y-4 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 id="add-participant-modal-title" className="text-base font-bold text-white flex items-center space-x-2">
+              <h3 id="add-participant-modal-title" className="font-display text-lg font-semibold text-slate-50 flex items-center space-x-2">
                 <Users className="h-5 w-5 text-emerald-400" />
                 <span>Register Participant</span>
               </h3>
@@ -1420,7 +1420,7 @@ export default function ProjectWorkspacePage() {
         >
           <div className="w-full max-w-2xl rounded-2xl border border-slate-700 bg-slate-900 p-6 space-y-4 shadow-2xl my-8">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 id="record-consent-modal-title" className="text-base font-bold text-white flex items-center space-x-2">
+              <h3 id="record-consent-modal-title" className="font-display text-lg font-semibold text-slate-50 flex items-center space-x-2">
                 <FileCheck className="h-5 w-5 text-emerald-400" />
                 <span>Record Consent Form</span>
               </h3>
@@ -1527,7 +1527,7 @@ export default function ProjectWorkspacePage() {
         >
           <div className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-6 space-y-4 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 id="propose-use-modal-title" className="text-base font-bold text-white flex items-center space-x-2">
+              <h3 id="propose-use-modal-title" className="font-display text-lg font-semibold text-slate-50 flex items-center space-x-2">
                 <GitCompare className="h-5 w-5 text-emerald-400" />
                 <span>Propose Footage / Likeness Use</span>
               </h3>
@@ -1620,7 +1620,7 @@ export default function ProjectWorkspacePage() {
         >
           <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6 space-y-4 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 id="upload-doc-modal-title" className="text-base font-bold text-white flex items-center space-x-2">
+              <h3 id="upload-doc-modal-title" className="font-display text-lg font-semibold text-slate-50 flex items-center space-x-2">
                 <Upload className="h-5 w-5 text-emerald-400" />
                 <span>Upload Release Agreement</span>
               </h3>
@@ -1690,7 +1690,7 @@ export default function ProjectWorkspacePage() {
         >
           <div className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-6 space-y-4 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <h3 id="ocr-preview-modal-title" className="text-base font-bold text-white flex items-center space-x-2">
+              <h3 id="ocr-preview-modal-title" className="font-display text-lg font-semibold text-slate-50 flex items-center space-x-2">
                 <FileText className="h-5 w-5 text-emerald-400" />
                 <span>Extracted Text: {ocrDocName}</span>
               </h3>

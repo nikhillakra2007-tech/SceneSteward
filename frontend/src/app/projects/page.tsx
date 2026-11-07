@@ -104,8 +104,8 @@ export default function ProjectsPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-5">
         <div>
-          <h1 className="text-2xl font-bold text-white flex items-center space-x-2.5">
-            <Film className="h-6 w-6 text-emerald-400" />
+          <h1 className="font-display text-3xl font-semibold tracking-tight text-slate-50 flex items-center gap-3">
+            <Film className="h-6 w-6 text-brass-400" />
             <span>Documentary Projects</span>
           </h1>
           <p className="text-sm text-slate-400 mt-1">
@@ -118,7 +118,7 @@ export default function ProjectsPage() {
             setModalError(null);
             setShowModal(true);
           }}
-          className="inline-flex items-center space-x-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-sm transition"
+          className="ss-btn-primary"
         >
           <Plus className="h-4 w-4" />
           <span>New Project</span>
