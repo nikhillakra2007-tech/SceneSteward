@@ -291,12 +291,80 @@ docker compose --env-file backend/.env.staging -f docker-compose.staging.yml dow
 
 ## 13. Switch Agent Collaboration Integration
 
-SceneSteward features native integration with the **Switch agent collaboration protocol**, enabling real-time human–AI clearance workflows:
-- **Switch Protocol Gateway**: Implements the official Switch wire format (`GET /health`, `GET /agents/{id}/ops`, `POST /agents/{id}/message`, `GET /agents/{id}/events` SSE).
-- **Consent-Aware Clearance Agent**: Listens in Switch rooms, queries PostgreSQL for participant releases, enforces the 15 canonical consent categories and Non-Transitive Consent invariants.
+SceneSteward features native integration with the **Switch agent collaboration platform** (`http://127.0.0.1:64432`), enabling real-time human–AI clearance workflows:
+- **Switch Protocol Gateway**: Implements the official Switch wire format (`GET /health`, `POST /agents`, `POST /agents/{id}/message`, `GET /agents/{id}/events` SSE, `GET /agents/{id}/rooms/{room_id}/history`).
+- **Consent-Aware Clearance Agent (`scenesteward-clearance`)**: Listens in Switch rooms, queries PostgreSQL for participant releases, enforces the 15 canonical consent categories and Non-Transitive Consent invariants.
 - **Human Authority Loop**: Formal decisions are committed by authorized directors via SceneSteward's authenticated API; immutable audit events with SHA-256 digest chains are recorded and notified back to Switch.
 
+### Which Agents Are Connected?
+1. **SceneSteward Clearance Agent (`scenesteward-clearance` | ID: `adf16e2a-4ce2-4598-baa7-ca8865ca4308`)**:
+   - Registered directly with Switch Core with `connection_model: always_on` and `message_exchange: true`.
+   - Equipped with tools: `assess_footage_ethics`, `check_consent_status`, `process_withdrawal`.
+   - Listens to production room conversations, monitors footage usage queries, and evaluates participant consent boundaries in real time.
+2. **Google Antigravity Systems Agent (`google-antigravity-01`)**:
+   - Software engineering and architectural evaluation agent communicating over Agent Client Protocol (ACP).
+   - Evaluates system architecture and principle-of-least-privilege boundaries for asset management.
+3. **Human Production Personas**:
+   - **Olivia (Director)**: In-room creative lead issuing clearance queries and providing written justifications.
+   - **Marcus (Producer)**: Production coordinator managing distribution timelines and deliverables.
+   - **Dr. Fiona Bennett (Subject)**: Documentary participant with self-service rights via the Transparency Portal.
+
+### How the Channel / Room is Set Up
+- **Room Name:** `SceneSteward — Footage Clearance`
+- **Room ID:** `aeec10b9-781c-4625-a07a-692279393943`
+- **Transport ID:** `sw_room_9a87a47cafa54468891786600cba9d0a`
+- **Room Moderation Endpoint:** `POST /agents/{agent_id}/moderation/rooms` with `internal_only: true` and `agent_names: ["scenesteward-clearance"]`.
+- **Event Flow:**
+  ```text
+  Human Producer ──► Switch Room ──► Switch Core (64432)
+                                            │
+                                    (SSE Event Stream)
+                                            ▼
+                                  SceneSteward Agent
+                                            │
+                                (PostgreSQL Consent Query)
+                                            ▼
+                              Non-Transitive Invariant Check
+                                            │
+                                (Advisory Clearance Warning)
+                                            ▼
+  Human Producer ◄── Switch Room ◄── Switch Core (64432)
+  ```
+
+### Prompt to Make It Work in Switch Chat
+To trigger the automated ethical clearance analysis in the Switch room, send the following prompt as a human filmmaker:
+
+```text
+@scenesteward-clearance We are assembling the teaser trailer for 'Wilderness Echoes' to air on national broadcast and YouTube. Can we use the raw interview footage of Dr. Fiona Bennett discussing clinical trial failures in this promotional trailer?
+```
+
+**What happens behind the scenes:**
+1. Switch Core dispatches the message to `scenesteward-clearance`.
+2. SceneSteward queries the 15 canonical consent categories for Dr. Fiona Bennett in PostgreSQL:
+   - `interview_recording = GRANTED` (signed primary release).
+   - `promotional_clips = NOT_DISCUSSED` (unauthorized for promotional syndication).
+3. The Non-Transitive Consent Invariant triggers: *"Consent for primary interview capture does not transitively authorize promotional derivative broadcast."*
+4. The agent posts an advisory assessment to the room:
+   > **[SceneSteward Ethical Advisory]**
+   > Footage of Dr. Fiona Bennett cannot be automatically cleared for trailer broadcast. The participant signed for primary documentary inclusion, but promotional marketing clips remain NOT DISCUSSED. Silence is never consent. Mandatory human decision rationale required before broadcast release.
+5. The human director submits written justification: `"Hold trailer release until direct subject discussion."`
+6. SceneSteward commits the decision to PostgreSQL and appends an immutable SHA-256 signed audit event to `audit_events`.
+
 ### Running the Live Switch Clearance Demonstration
+
+#### Option A: Running with Genuine Switch Core (Port 64432)
+```powershell
+# 1. Ensure Switch Core is running (managed by Switch Console on port 64432)
+# 2. Run the automated 13-point live Switch integration test:
+$env:PYTHONPATH='backend'
+& backend\.venv\Scripts\python.exe scratch/verify_actual_switch_connection.py
+
+# 3. Test sending a live clearance prompt and receiving room history:
+$env:PYTHONPATH='backend'
+& backend\.venv\Scripts\python.exe scratch/send_message_actual_switch.py
+```
+
+#### Option B: Running with Local Switch Protocol Server (Port 8010)
 ```powershell
 # 1. Start Switch Local Protocol Gateway (Port 8010)
 $env:PYTHONPATH='backend'
@@ -306,9 +374,9 @@ $env:PYTHONPATH='backend'
 $env:PYTHONPATH='backend'
 & backend\.venv\Scripts\python.exe -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
 
-# 3. Execute the Live End-to-End Vertical Clearance Workflow
+# 3. Execute the Live Multi-Agent Clearance Demonstration:
 $env:PYTHONPATH='backend'
-& backend\.venv\Scripts\python.exe backend/scripts/run_live_switch_demo.py
+& backend\.venv\Scripts\python.exe backend/scripts/run_live_multi_agent_demo.py
 ```
 
 ---
