@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, ArrowLeft, ArrowUpRight, Play, X, ShieldCheck, ScanLine, Users, Check, Maximize2, MoveHorizontal } from 'lucide-react';
 import { Reveal } from '@/components/Reveal';
+import CursorStage from '@/components/CursorStage';
 import { useTheme } from '@/lib/theme';
 
 const SCREENS = [
@@ -54,9 +55,13 @@ export default function HomePage() {
     if (g.moved) {
       suppressClick.current = true;
       window.setTimeout(() => { suppressClick.current = false; }, 0);
+    } else {
+      // pointer capture retargets the click to the viewport, so a tap zooms from here
+      setZoom(SCREENS[active].id);
     }
     setDrag(null);
   };
+  const cancelGesture = () => { gesture.current = null; setDrag(null); };
 
   return (
     <div className="product-landing">
@@ -72,15 +77,20 @@ export default function HomePage() {
 
       <Reveal as="section" className="product-stage" delay={60}>
         <div id="in-action" style={{ scrollMarginTop: 90 }} />
-        <div className="stage-heading"><div><span className="section-index">INSIDE SCENESTEWARD</span><h2>Less chasing paperwork.<br /><em>More caring for people.</em></h2></div><p>Explore the actual interface.<br />Swipe or drag through the screens.<br />Screens use fictional sample data.</p></div>
+        <div className="stage-heading"><div><span className="section-index">INSIDE SCENESTEWARD</span><h2>Less chasing paperwork.<br /><em>More caring for people.</em></h2></div><p>Explore the actual interface.<br />Move across it - hover, swipe or drag.<br />Screens use fictional sample data.</p></div>
         <div className="screen-controls">
           <div className="screen-progress" aria-hidden="true"><span>{screen.number} / 0{SCREENS.length}</span><span className="bar"><i style={{ width: `${((active + 1) / SCREENS.length) * 100}%` }} /></span><span className="screen-progress-label">{screen.label}</span></div>
-          <div className="screen-hint" aria-hidden="true"><MoveHorizontal size={13} /><span>DRAG · SWIPE</span></div>
+          <div className="screen-hint" aria-hidden="true"><MoveHorizontal size={13} /><span>HOVER · DRAG · SWIPE</span></div>
           <div className="screen-arrows">
             <button type="button" onClick={() => goTo(active - 1)} disabled={active === 0} aria-label="Previous screenshot"><ArrowLeft size={15} /></button>
             <button type="button" onClick={() => goTo(active + 1)} disabled={active === SCREENS.length - 1} aria-label="Next screenshot"><ArrowRight size={15} /></button>
           </div>
         </div>
+        <CursorStage overlays={<>
+          <div className="stage-chip chip-review" aria-hidden="true"><span><i />HUMAN REVIEW · PENDING</span></div>
+          <div className="stage-chip chip-consent" aria-hidden="true"><span><i />CONSENT CLEARED · TRAILER V2</span></div>
+          <div className="stage-chip chip-window" aria-hidden="true"><span><i />RELEASE WINDOW · FESTIVAL ONLY</span></div>
+        </>}>
         <div className="screen-frame">
           <div className="screen-toolbar"><span className="window-dots"><i /><i /><i /></span><span>scenesteward / {screen.id}</span><button onClick={() => setZoom(screen.id)} aria-label={`Enlarge ${screen.label} screenshot`}><Maximize2 size={14} /><span>Expand</span></button></div>
           <div
@@ -93,7 +103,7 @@ export default function HomePage() {
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={endGesture}
-            onPointerCancel={endGesture}
+            onPointerCancel={cancelGesture}
           >
             <div className="screen-track" style={{ transform: `translateX(calc(${-active * 100}% + ${drag ?? 0}px))` }}>
               {SCREENS.map((s, i) => (
@@ -112,6 +122,7 @@ export default function HomePage() {
           </div>
           <div className="screen-caption"><span><i /> ACTUAL FRONTEND CAPTURE</span><span>ILLUSTRATIVE DATA · NOT A LIVE PRODUCTION</span></div>
         </div>
+        </CursorStage>
         <div className="screen-explanation" key={screen.id}><span className="section-index">{screen.number} / {screen.label}</span><h3>{screen.title}</h3><p>{screen.body}</p></div>
       </Reveal>
 
