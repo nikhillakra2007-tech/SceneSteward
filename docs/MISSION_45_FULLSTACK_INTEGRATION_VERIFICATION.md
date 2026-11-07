@@ -76,3 +76,4 @@ All automated test suites, end-to-end browser journeys, and integration scripts 
 2. **Silence is Never Consent**: Unaddressed categories remain `not_discussed` and block automated clearance.
 3. **Mandatory Human Decision Gate**: AI reviews provide non-binding advisory findings; clearance requires written human rationale.
 4. **Append-Only Ledger**: All events generate SHA-256 integrity-verifiable audit entries in PostgreSQL.
+

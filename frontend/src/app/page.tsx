@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { ArrowRight, ArrowLeft, ArrowUpRight, Play, X, ShieldCheck, ScanLine, Users, Check, Maximize2, MoveHorizontal } from 'lucide-react';
 import { Reveal } from '@/components/Reveal';
 import CursorStage from '@/components/CursorStage';
@@ -153,7 +154,7 @@ export default function HomePage() {
                     onClick={() => { if (suppressClick.current) return; setZoom(s.id); }}
                     aria-label={`View ${s.label} screenshot at full size`}
                   >
-                    <img src={imgSrc(s.id)} alt={`SceneSteward ${s.label} interface populated with fictional sample data`} width="1440" height="1000" draggable={false} loading={i === 0 ? 'eager' : 'lazy'} />
+                    <Image src={imgSrc(s.id)} alt={`SceneSteward ${s.label} interface populated with fictional sample data`} width={1440} height={1000} draggable={false} priority={i === 0} unoptimized />
                   </button>
                 </div>
               ))}
@@ -183,7 +184,7 @@ export default function HomePage() {
         <div className="finale-wordmark" aria-hidden="true"><svg viewBox="0 0 1160 175" preserveAspectRatio="xMidYMid meet"><text x="580" y="132" textAnchor="middle" textLength="1125" lengthAdjust="spacingAndGlyphs">SCENESTEWARD</text></svg></div>
         <div className="finale-meta"><span>SCENE / STEWARD</span><span>CONSENT, KEPT IN THE RECORD</span><span>EST. 2026</span></div>
       </Reveal>
-      {zoom && <div className="screenshot-modal" role="dialog" aria-modal="true" aria-label="Product screenshot" onClick={() => setZoom(null)}><button autoFocus onClick={() => setZoom(null)} aria-label="Close screenshot"><X /></button><img src={imgSrc(zoom)} alt="SceneSteward actual frontend with fictional sample data" onClick={e => e.stopPropagation()} onKeyDown={e => {if (e.key === 'Escape') setZoom(null);}} /><p>Actual SceneSteward frontend · Fictional sample data</p></div>}
+      {zoom && <div className="screenshot-modal" role="dialog" aria-modal="true" aria-label="Product screenshot" onClick={() => setZoom(null)}><button autoFocus onClick={() => setZoom(null)} aria-label="Close screenshot"><X /></button><Image src={imgSrc(zoom)} alt="SceneSteward actual frontend with fictional sample data" width={1440} height={1000} onClick={e => e.stopPropagation()} onKeyDown={e => {if (e.key === 'Escape') setZoom(null);}} unoptimized /><p>Actual SceneSteward frontend · Fictional sample data</p></div>}
     </div>
   );
 }
