@@ -55,3 +55,4 @@ The layout has been validated across three standard viewports:
 - **No Fake Data**: All views pull live data from the FastAPI REST endpoints.
 - **15 Canonical Categories**: The 15 consent categories remain intact and strictly typed across frontend and backend.
 - **Fail-Closed Operations**: Unauthenticated access triggers login modal; unauthorized actions return dignified error states without silent failure.
+
