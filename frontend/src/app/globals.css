@@ -644,3 +644,12 @@ body::after {
 .hero-copy h1{letter-spacing:-.03em!important;}
 .tr-word{display:inline-block;margin-right:.26em;}
 @media(max-width:700px){.hero-copy h1{font-size:40px!important;}.hero-copy h1 em{white-space:nowrap;}}
+
+/* Light-mode contrast fixes: text-white sits on light surfaces in the workspace. */
+:root:not([data-theme="dark"]) .text-white {
+  color: #1d2721;
+}
+/* ...except when it sits on a saturated button or chip background. */
+:root:not([data-theme="dark"]) :where(.bg-emerald-600, .bg-emerald-500, .bg-rose-600, .bg-rose-500, .bg-amber-600, .bg-amber-500, .bg-indigo-600, .bg-indigo-500, .bg-blue-600, .bg-blue-500).text-white {
+  color: #ffffff;
+}
