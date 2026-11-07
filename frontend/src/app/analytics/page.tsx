@@ -130,7 +130,7 @@ export default function AnalyticsPage() {
                 <BarChart3 className="h-5 w-5" />
               </div>
               <div>
-                <h1 className="text-lg font-bold text-slate-100 tracking-tight">Analytics & Operational Intelligence</h1>
+                <h1 className="font-display text-xl font-semibold tracking-tight text-slate-50">Analytics &amp; Operational Intelligence</h1>
                 <p className="text-xs text-slate-400">
                   {overview?.scope.project_title
                     ? `Scoped to ${overview.scope.project_title}`
