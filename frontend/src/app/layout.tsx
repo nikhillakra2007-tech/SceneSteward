@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Fraunces, Inter, IBM_Plex_Mono } from 'next/font/google';
+import { Fraunces, Instrument_Sans, IBM_Plex_Mono } from 'next/font/google';
 import './globals.css';
 import { Navbar } from '@/components/Navbar';
 import { ToastProvider } from '@/components/Toast';
@@ -11,7 +11,7 @@ const display = Fraunces({
   axes: ['opsz'],
 });
 
-const sans = Inter({
+const sans = Instrument_Sans({
   subsets: ['latin'],
   variable: '--font-sans',
 });
