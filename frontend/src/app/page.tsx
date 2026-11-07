@@ -38,9 +38,9 @@ export default function HomePage() {
     const update = () => {
       ticking = false;
       const y = window.scrollY;
-      const p = Math.min(1, y / 900);
-      el.style.transform = `translate3d(0, ${(y * 0.12).toFixed(1)}px, 0)`;
-      el.style.opacity = (1 - p * 0.85).toFixed(3);
+      const p = Math.min(1, y / 480);
+      el.style.transform = `translate3d(0, ${(y * 0.1).toFixed(1)}px, 0)`;
+      el.style.opacity = (1 - p).toFixed(3);
     };
     const onScroll = () => {
       if (!ticking) {
