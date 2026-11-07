@@ -3,9 +3,10 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Clapperboard, Film, BarChart3, LogOut, UserCircle, LogIn, ArrowRightLeft, X, Menu } from 'lucide-react';
+import { Clapperboard, Film, BarChart3, LogOut, UserCircle, LogIn, ArrowRightLeft, X, Menu, Sun, Moon } from 'lucide-react';
 import { api, getAuthToken, User } from '@/lib/api';
 import { useToast } from '@/components/Toast';
+import { toggleTheme, useTheme } from '@/lib/theme';
 
 const ROLE_PRESETS = [
   { label: 'Olivia (Director / Owner)', email: 'olivia@example.com', name: 'Olivia Director' },
@@ -48,6 +49,7 @@ function NavLink({
 
 export function Navbar() {
   const pathname = usePathname();
+  const theme = useTheme();
   const { success, error: toastError, info } = useToast();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(false);
@@ -142,6 +144,16 @@ export function Navbar() {
             </div>
 
             <div className="flex items-center gap-2.5">
+              <button
+                type="button"
+                onClick={toggleTheme}
+                title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+                aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+                data-testid="theme-toggle"
+                className="rounded-md border border-slate-700 p-1.5 text-slate-400 transition hover:border-brass-500/50 hover:text-brass-400"
+              >
+                {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              </button>
               {currentUser ? (
                 <div className="flex items-center gap-2.5">
                   <div className="text-right hidden sm:block leading-tight">

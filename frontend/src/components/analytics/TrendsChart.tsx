@@ -83,26 +83,26 @@ export function TrendsChart({ series }: TrendsChartProps) {
       <div className="relative w-full overflow-hidden">
         <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-44 overflow-visible">
           {/* Subtle grid lines */}
-          <line x1={padding} y1={padding} x2={width - padding} y2={padding} stroke="#334155" strokeDasharray="3 3" opacity={0.4} />
-          <line x1={padding} y1={height / 2} x2={width - padding} y2={height / 2} stroke="#334155" strokeDasharray="3 3" opacity={0.4} />
-          <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="#334155" strokeDasharray="3 3" opacity={0.6} />
+          <line x1={padding} y1={padding} x2={width - padding} y2={padding} stroke="var(--chart-grid)" strokeDasharray="3 3" opacity={0.4} />
+          <line x1={padding} y1={height / 2} x2={width - padding} y2={height / 2} stroke="var(--chart-grid)" strokeDasharray="3 3" opacity={0.4} />
+          <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="var(--chart-grid)" strokeDasharray="3 3" opacity={0.6} />
 
           {/* Paths */}
-          <path d={pathConsent} fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-          <path d={pathReviews} fill="none" stroke="#38bdf8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          <path d={pathTasks} fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <path d={pathConsent} fill="none" stroke="var(--chart-consent)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+          <path d={pathReviews} fill="none" stroke="var(--chart-review)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <path d={pathTasks} fill="none" stroke="var(--chart-task)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           {series.some((p) => p.withdrawals_requested > 0) && (
-            <path d={pathWithdrawals} fill="none" stroke="#f43f5e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+            <path d={pathWithdrawals} fill="none" stroke="var(--chart-withdrawal)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
           )}
 
           {/* Active Data Points */}
           {series.map((p, idx) => (
             <g key={p.date}>
               {p.consent_confirmed > 0 && (
-                <circle cx={getX(idx)} cy={getY(p.consent_confirmed)} r="3" fill="#10b981" />
+                <circle cx={getX(idx)} cy={getY(p.consent_confirmed)} r="3" fill="var(--chart-consent)" />
               )}
               {p.withdrawals_requested > 0 && (
-                <circle cx={getX(idx)} cy={getY(p.withdrawals_requested)} r="3.5" fill="#f43f5e" />
+                <circle cx={getX(idx)} cy={getY(p.withdrawals_requested)} r="3.5" fill="var(--chart-withdrawal)" />
               )}
             </g>
           ))}
