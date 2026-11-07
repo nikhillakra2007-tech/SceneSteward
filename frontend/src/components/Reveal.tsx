@@ -47,7 +47,6 @@ export function Reveal({
   const classes = `${armed ? 'reveal' : ''} ${visible ? 'is-visible' : ''} ${className}`.trim();
 
   return (
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     <Tag
       ref={ref as any}
       className={classes}

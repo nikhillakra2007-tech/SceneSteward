@@ -171,7 +171,7 @@ export default function HomePage() {
         <TextReveal text="A festival release is not a streaming release. An interview is not permission for a synthetic voice. The record keeps the difference." />
       </section>
 
-      <section className="promise-section"><Reveal className="promise-intro"><span className="section-index">A CLEAR LINE, AT EVERY STEP</span><h2>Your story can evolve.<br /><em>Consent doesn't travel<br />with it automatically.</em></h2></Reveal><div className="promise-list">{[
+      <section className="promise-section"><Reveal className="promise-intro"><span className="section-index">A CLEAR LINE, AT EVERY STEP</span><h2>Your story can evolve.<br /><em>Consent doesn&rsquo;t travel<br />with it automatically.</em></h2></Reveal><div className="promise-list">{[
         [Users, 'Start with the person.', 'Record what each participant agreed to, declined or still needs to discuss. Keep the original context close.'],
         [ScanLine, 'Check the proposed use.', 'Compare the next trailer, platform or audience against the consent record. Bring differences to the surface.'],
         [ShieldCheck, 'Leave the decision to a human.', 'Advisory findings support the review. Authorized people make the final call and record their reasons.'],
