@@ -2,18 +2,38 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { 
-  ShieldCheck, 
-  Film, 
-  Users, 
-  AlertTriangle, 
-  CheckCircle2, 
+import {
+  ShieldCheck,
+  Film,
+  Users,
   ArrowRight,
+  ArrowUpRight,
   Lock,
-  Sparkles,
-  Server
+  Eye,
+  UserCheck,
 } from 'lucide-react';
 import { api, Project, User, getAuthToken } from '@/lib/api';
+
+const PRINCIPLES = [
+  {
+    index: '01',
+    icon: Lock,
+    title: 'Silence is never agreement',
+    body: 'Unanswered outreach or missing documentation never defaults to permission. If a participant has not explicitly agreed to a context, it is flagged as Unresolved or Declined.',
+  },
+  {
+    index: '02',
+    icon: Eye,
+    title: 'Consent is per-use, always',
+    body: 'Agreement to an in-depth interview never authorizes synthetic voice cloning, sensationalized trailers, or overseas syndication without a separate explicit release.',
+  },
+  {
+    index: '03',
+    icon: UserCheck,
+    title: 'A human decides, every time',
+    body: 'Advisory agents analyze discrepancies, tone, and vulnerability risk — but only authorized directors and care leads make final determinations.',
+  },
+];
 
 export default function HomePage() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -35,7 +55,6 @@ export default function HomePage() {
             // token may be invalid
           }
         }
-        // Test backend connectivity
         try {
           const metrics = await api.getMetrics();
           setBackendOnline(true);
@@ -50,137 +69,155 @@ export default function HomePage() {
   }, []);
 
   return (
-    <div className="space-y-10">
-      {/* Hero Section */}
-      <div className="relative rounded-2xl border border-slate-800 bg-gradient-to-b from-slate-900 to-slate-950 p-8 sm:p-10 shadow-2xl overflow-hidden">
-        <div className="absolute right-0 top-0 -mr-16 -mt-16 w-80 h-80 rounded-full bg-emerald-500/10 blur-3xl pointer-events-none" />
-        
-        <div className="max-w-3xl space-y-4">
-          <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-950/80 border border-emerald-800 text-emerald-400 text-xs font-semibold">
-            <ShieldCheck className="h-4 w-4" />
-            <span>Ethical Safeguards &amp; Verification Active</span>
-          </div>
-
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
-            Protecting participant dignity throughout documentary storytelling.
-          </h1>
-
-          <p className="text-slate-300 text-base leading-relaxed">
-            SceneSteward coordinates participant releases, canonical consent records, advisory AI agents, 
-            and strict human-in-the-loop approvals so documentary filmmakers never overstep agreed boundaries.
-          </p>
-
-          <div className="pt-2 flex flex-wrap gap-3">
-            <Link
-              href="/projects"
-              className="inline-flex items-center space-x-2 px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-sm transition shadow-lg shadow-emerald-950/50"
-            >
-              <span>View Projects</span>
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-
-            <div className="inline-flex items-center space-x-2 px-4 py-2 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-300">
-              <Server className="h-3.5 w-3.5 text-emerald-400" />
-              <span>Backend Status:</span>
-              <span className={`font-semibold ${backendOnline ? 'text-emerald-400' : 'text-amber-400'}`}>
-                {backendOnline === null ? 'Checking...' : backendOnline ? 'Connected (FastAPI + RLS)' : 'Offline / Standalone'}
-              </span>
+    <div className="space-y-16 sm:space-y-20">
+      {/* ── Hero ─────────────────────────────────────────── */}
+      <section className="relative">
+        <div className="pointer-events-none absolute inset-x-0 -top-4 flex justify-between font-mono text-[10px] uppercase tracking-[0.3em] text-slate-600">
+          <span>Reel 01</span>
+          <span className="hidden sm:inline">Participant consent · Use verification · Human review</span>
+          <span>Scene / Steward</span>
+        </div>
+        <div className="border-y border-slate-800 py-12 sm:py-16">
+          <div className="max-w-3xl space-y-6">
+            <p className="ss-kicker flex items-center gap-2">
+              <ShieldCheck className="h-3.5 w-3.5" />
+              Ethical safeguards &amp; verification active
+            </p>
+            <h1 className="font-display text-4xl font-semibold leading-[1.08] tracking-tight text-slate-50 sm:text-6xl">
+              Protecting participant dignity,{' '}
+              <em className="text-brass-400">frame by frame.</em>
+            </h1>
+            <p className="max-w-xl text-[15px] leading-relaxed text-slate-400">
+              SceneSteward coordinates participant releases, canonical consent records, advisory
+              agents, and strict human-in-the-loop approvals — so documentary filmmakers never
+              overstep agreed boundaries.
+            </p>
+            <div className="flex flex-wrap items-center gap-3 pt-1">
+              <Link href="/projects" className="ss-btn-primary">
+                <span>View Projects</span>
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+              <div className="inline-flex items-center gap-2 rounded-md border border-slate-800 bg-slate-900/60 px-3.5 py-2 font-mono text-[11px] text-slate-400">
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    backendOnline === null
+                      ? 'bg-slate-500'
+                      : backendOnline
+                      ? 'bg-emerald-400'
+                      : 'bg-amber-400'
+                  }`}
+                />
+                <span>
+                  Backend ·{' '}
+                  {backendOnline === null
+                    ? 'checking'
+                    : backendOnline
+                    ? 'connected (FastAPI + RLS)'
+                    : 'offline / standalone'}
+                </span>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* Core Principles */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="p-6 rounded-xl border border-slate-800/80 bg-slate-900/40 space-y-3">
-          <div className="h-10 w-10 rounded-lg bg-rose-950/60 border border-rose-800 flex items-center justify-center text-rose-400">
-            <Lock className="h-5 w-5" />
-          </div>
-          <h3 className="font-bold text-slate-100 text-lg">Silence is Never Agreement</h3>
-          <p className="text-sm text-slate-400 leading-relaxed">
-            Unanswered outreach or missing documentation never defaults to permission. If a participant hasn&apos;t explicitly agreed to a context, it is flagged as Unresolved or Declined.
-          </p>
-        </div>
-
-        <div className="p-6 rounded-xl border border-slate-800/80 bg-slate-900/40 space-y-3">
-          <div className="h-10 w-10 rounded-lg bg-amber-950/60 border border-amber-800 flex items-center justify-center text-amber-400">
-            <AlertTriangle className="h-5 w-5" />
-          </div>
-          <h3 className="font-bold text-slate-100 text-lg">Per-Use Consent Boundary</h3>
-          <p className="text-sm text-slate-400 leading-relaxed">
-            Agreement to an in-depth documentary interview never authorizes synthetic voice cloning, sensationalized trailers, or overseas promotional syndication without separate explicit release.
-          </p>
-        </div>
-
-        <div className="p-6 rounded-xl border border-slate-800/80 bg-slate-900/40 space-y-3">
-          <div className="h-10 w-10 rounded-lg bg-emerald-950/60 border border-emerald-800 flex items-center justify-center text-emerald-400">
-            <CheckCircle2 className="h-5 w-5" />
-          </div>
-          <h3 className="font-bold text-slate-100 text-lg">Human Review Required</h3>
-          <p className="text-sm text-slate-400 leading-relaxed">
-            Advisory AI agents analyze discrepancies, emotional tone, and vulnerability risks, but only authorized human directors and care leads can make final determinations.
-          </p>
-        </div>
-      </div>
-
-      {/* Active Projects Preview */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
+      {/* ── Principles ───────────────────────────────────── */}
+      <section>
+        <div className="mb-8 flex items-end justify-between gap-4">
           <div>
-            <h2 className="text-xl font-bold text-slate-100">Active Documentary Workspaces</h2>
-            <p className="text-xs text-slate-400">Manage participant rosters, agreements, and proposed footage uses.</p>
+            <p className="ss-kicker mb-2">The rules we hold the line on</p>
+            <h2 className="font-display text-2xl font-semibold tracking-tight text-slate-50 sm:text-3xl">
+              Three principles, non-negotiable
+            </h2>
+          </div>
+        </div>
+        <div className="divide-y divide-slate-800 border-y border-slate-800">
+          {PRINCIPLES.map((p) => (
+            <div key={p.index} className="group grid grid-cols-[auto_1fr] gap-5 py-6 sm:grid-cols-[64px_auto_1fr] sm:gap-8 sm:py-7">
+              <span className="pt-1 font-mono text-xs text-brass-500/80">{p.index}</span>
+              <div className="hidden h-9 w-9 items-center justify-center rounded-md border border-slate-800 text-slate-500 transition group-hover:border-brass-500/40 group-hover:text-brass-400 sm:flex">
+                <p.icon className="h-4 w-4" />
+              </div>
+              <div className="space-y-1.5">
+                <h3 className="font-display text-lg font-semibold text-slate-100">{p.title}</h3>
+                <p className="max-w-2xl text-sm leading-relaxed text-slate-400">{p.body}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── Active Workspaces ────────────────────────────── */}
+      <section className="space-y-6">
+        <div className="flex items-end justify-between gap-4">
+          <div>
+            <p className="ss-kicker mb-2">Production</p>
+            <h2 className="font-display text-2xl font-semibold tracking-tight text-slate-50 sm:text-3xl">
+              Active documentary workspaces
+            </h2>
+            <p className="mt-1.5 text-sm text-slate-400">
+              Participant rosters, agreements, and proposed footage uses.
+            </p>
           </div>
           <Link
             href="/projects"
-            className="text-xs font-semibold text-emerald-400 hover:text-emerald-300 inline-flex items-center space-x-1"
+            className="group hidden items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.18em] text-brass-500 transition hover:text-brass-300 sm:inline-flex"
           >
-            <span>View All</span>
-            <ArrowRight className="h-3 w-3" />
+            <span>View all</span>
+            <ArrowUpRight className="h-3.5 w-3.5 transition group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
           </Link>
         </div>
 
         {currentUser ? (
           projects.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
               {projects.map((p) => (
                 <Link
                   key={p.id}
                   href={`/projects/${p.id}`}
-                  className="p-5 rounded-xl border border-slate-800 bg-slate-900/60 hover:bg-slate-900 hover:border-slate-700 transition space-y-3 block group"
+                  className="group ss-card block space-y-4 p-5 transition hover:border-slate-600 hover:bg-slate-900"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-xs px-2 py-0.5 rounded bg-slate-800 text-emerald-400 border border-slate-700 font-mono">
+                    <span className="rounded-sm border border-slate-700 bg-slate-850 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-emerald-400">
                       {p.status}
                     </span>
-                    <Film className="h-4 w-4 text-slate-500 group-hover:text-emerald-400 transition" />
+                    <Film className="h-4 w-4 text-slate-600 transition group-hover:text-brass-400" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-slate-200 group-hover:text-white transition">{p.title}</h3>
-                    <p className="text-xs text-slate-400 line-clamp-2 mt-1">
+                    <h3 className="font-display text-lg font-semibold text-slate-100 transition group-hover:text-white">
+                      {p.title}
+                    </h3>
+                    <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-400">
                       {p.description || p.purpose || 'No description provided.'}
                     </p>
                   </div>
-                  <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-500">
-                    <span>{p.themes?.slice(0, 2).join(', ') || 'Documentary'}</span>
-                    <span>Updated {new Date(p.updated_at).toLocaleDateString()}</span>
+                  <div className="flex items-center justify-between border-t border-slate-800/80 pt-3 font-mono text-[10px] uppercase tracking-wider text-slate-500">
+                    <span>{p.themes?.slice(0, 2).join(' · ') || 'Documentary'}</span>
+                    <span>{new Date(p.updated_at).toLocaleDateString()}</span>
                   </div>
                 </Link>
               ))}
             </div>
           ) : (
-            <div className="p-8 text-center rounded-xl border border-dashed border-slate-800 bg-slate-900/20 text-slate-400">
-              <Film className="h-8 w-8 mx-auto mb-2 text-slate-600" />
-              <p className="text-sm">No active projects yet. Use the Projects tab to create your first documentary workspace.</p>
+            <div className="ss-card border-dashed p-10 text-center text-slate-400">
+              <Film className="mx-auto mb-3 h-7 w-7 text-slate-600" />
+              <p className="text-sm">
+                No active projects yet. Use the Projects tab to create your first documentary workspace.
+              </p>
             </div>
           )
         ) : (
-          <div className="p-8 text-center rounded-xl border border-slate-800 bg-slate-900/30 text-slate-300 space-y-3">
-            <Users className="h-8 w-8 mx-auto text-emerald-400" />
-            <p className="text-sm font-medium">Log in to view and manage projects in this workspace.</p>
-            <p className="text-xs text-slate-400">Click &ldquo;Olivia (Director)&rdquo; in the top-right navbar to authenticate with the dev session.</p>
+          <div className="ss-card space-y-3 p-10 text-center">
+            <Users className="mx-auto h-7 w-7 text-brass-400" />
+            <p className="text-sm font-medium text-slate-200">
+              Sign in to view and manage projects in this workspace.
+            </p>
+            <p className="text-xs text-slate-500">
+              Use &ldquo;Olivia (Director)&rdquo; in the navbar to authenticate with the dev session.
+            </p>
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }

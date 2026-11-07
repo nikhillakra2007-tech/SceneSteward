@@ -312,8 +312,8 @@ export default function ParticipantPortalPage() {
       </div>
 
       {/* Participant Profile Banner */}
-      <div className="rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-900 to-slate-950 p-6 sm:p-8 space-y-4 shadow-xl">
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-white">{participant.display_name}</h1>
+      <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-6 sm:p-8 space-y-4">
+        <h1 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight text-slate-50">{participant.display_name}</h1>
         
         {/* Core Dignity Guarantee */}
         <div className="p-4 rounded-xl border border-emerald-800/60 bg-emerald-950/40 text-emerald-300 text-xs leading-relaxed space-y-1">
@@ -341,7 +341,7 @@ export default function ParticipantPortalPage() {
       <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 space-y-5">
         <div className="flex items-center justify-between border-b border-slate-800 pb-3 flex-wrap gap-2">
           <div>
-            <h2 className="text-base font-bold text-white flex items-center space-x-2">
+            <h2 className="font-display text-lg font-semibold text-slate-50 flex items-center space-x-2">
               <FileCheck className="h-5 w-5 text-emerald-400" />
               <span>{t.currentConsentTitle}</span>
             </h2>
@@ -392,7 +392,7 @@ export default function ParticipantPortalPage() {
       <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 space-y-5">
         <div className="flex items-center justify-between border-b border-slate-800 pb-3 flex-wrap gap-2">
           <div>
-            <h2 className="text-base font-bold text-white flex items-center space-x-2">
+            <h2 className="font-display text-lg font-semibold text-slate-50 flex items-center space-x-2">
               <MessageSquare className="h-5 w-5 text-emerald-400" />
               <span>{t.formTitle}</span>
             </h2>
@@ -495,7 +495,7 @@ export default function ParticipantPortalPage() {
 
       {/* Personal Audit Timeline */}
       <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 space-y-4">
-        <h2 className="text-base font-bold text-white flex items-center space-x-2">
+        <h2 className="font-display text-lg font-semibold text-slate-50 flex items-center space-x-2">
           <Lock className="h-5 w-5 text-emerald-400" />
           <span>{t.timelineTitle}</span>
         </h2>
