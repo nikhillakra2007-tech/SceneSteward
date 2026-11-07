@@ -118,13 +118,13 @@ export function Navbar() {
       <header className="sticky top-0 z-40 border-b border-slate-800/90 bg-slate-950/85 backdrop-blur-md">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-8">
+            <div className="flex items-center gap-4 md:gap-8 min-w-0">
               <Link href="/" className="group flex items-center gap-3">
                 <div className="flex h-9 w-9 items-center justify-center rounded-md border border-brass-500/50 bg-gradient-to-b from-brass-500/15 to-transparent text-brass-400 transition group-hover:border-brass-400">
                   <Clapperboard className="h-[18px] w-[18px]" />
                 </div>
-                <div className="flex flex-col justify-center">
-                  <span className="font-display text-[17px] font-semibold leading-none tracking-tight text-slate-50">
+                <div className="flex flex-col justify-center min-w-0">
+                  <span className="font-display text-[15px] sm:text-[17px] font-semibold leading-none tracking-tight text-slate-50 truncate">
                     SceneSteward
                   </span>
                   <span className="mt-1 hidden font-mono text-[9px] uppercase leading-none tracking-[0.24em] text-slate-500 sm:block">
@@ -143,7 +143,7 @@ export function Navbar() {
               </nav>
             </div>
 
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
               <button
                 type="button"
                 onClick={toggleTheme}
@@ -187,9 +187,8 @@ export function Navbar() {
                     disabled={loading}
                     data-testid="quick-login-olivia"
                     onClick={() => handleDevLogin('olivia@example.com', 'Olivia Director')}
-                    className="shrink-0 whitespace-nowrap rounded-md bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-emerald-50 transition hover:bg-emerald-500 disabled:opacity-50"
+                    className="hidden sm:inline-block shrink-0 whitespace-nowrap rounded-md bg-emerald-600 px-2 sm:px-2.5 py-1.5 text-xs font-semibold text-emerald-50 transition hover:bg-emerald-500 disabled:opacity-50"
                   >
-                    <span className="sm:hidden">Olivia</span>
                     <span className="hidden sm:inline">Olivia (Director)</span>
                   </button>
                   <button
@@ -202,12 +201,13 @@ export function Navbar() {
                   </button>
                   <button
                     onClick={() => setModalOpen(true)}
+                    title="Sign in or switch user"
+                    aria-label="Sign in or switch user"
                     data-testid="custom-login-btn"
-                    className="flex items-center gap-1.5 rounded-md border border-brass-500/40 px-2.5 py-1.5 text-xs font-medium text-brass-400 transition hover:border-brass-400 hover:text-brass-300"
+                    className="flex items-center gap-1.5 rounded-md border border-brass-500/40 px-2 sm:px-2.5 py-1.5 text-xs font-medium text-brass-400 transition hover:border-brass-400 hover:text-brass-300"
                   >
                     <LogIn className="h-3.5 w-3.5" />
                     <span className="hidden sm:inline">Custom / Switch</span>
-                    <span className="sm:hidden">Login</span>
                   </button>
                 </div>
               )}
