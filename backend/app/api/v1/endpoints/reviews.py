@@ -1,6 +1,7 @@
 """Reviews — list, read, record human decisions through a validated state machine."""
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import UTC, datetime
 from typing import Annotated
@@ -24,6 +25,8 @@ from app.services import reviews as review_service
 from app.utils.pagination import PageParams, page_params
 
 router = APIRouter(tags=["reviews"])
+
+logger = logging.getLogger(__name__)
 
 
 def _out(r: Review) -> ReviewOut:
@@ -74,7 +77,7 @@ def human_decision(review_id: uuid.UUID, payload: HumanDecisionRequest,
         actor_user_id=user.id, expected_version=payload.expected_version,
     )
     import uuid as _uuid
-    audit.record(db, project_id=review.project_id, participant_id=None,
+    audit_evt = audit.record(db, project_id=review.project_id, participant_id=None,
                  actor_type="user", actor_id=str(user.id),
                  action="review.human_decision", entity_type="review", entity_id=review.id,
                  new_value={"decision": payload.decision,
@@ -83,6 +86,30 @@ def human_decision(review_id: uuid.UUID, payload: HumanDecisionRequest,
                  correlation_id=_uuid.uuid4())
     db.commit()
     db.refresh(review)
+
+    # If project is linked to a Switch room, notify the room with audit proof
+    try:
+        import hashlib
+
+        from app.integrations.switch.agent_worker import SwitchAgentWorker
+        from app.models import SwitchRoomLink
+        link = db.query(SwitchRoomLink).filter(SwitchRoomLink.project_id == review.project_id).first()
+        if link and link.switch_room_id:
+            digest = hashlib.sha256(f"{audit_evt.id}:{review.id}:{payload.decision}:{payload.reason}".encode()).hexdigest()
+            worker = SwitchAgentWorker()
+            worker.notify_human_decision_committed(
+                db,
+                room_id=link.switch_room_id,
+                review_id=str(review.id),
+                decision=payload.decision,
+                rationale=payload.reason,
+                reviewer_name=user.full_name or "Authorized Reviewer",
+                audit_event_id=str(audit_evt.id),
+                hash_chain=digest,
+            )
+    except Exception:
+        logger.exception("switch room notification failed after human decision")
+
     return _out(review)
 
 

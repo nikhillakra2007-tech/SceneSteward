@@ -141,4 +141,16 @@ class HttpSwitchAdapter:
         # Domain events must carry a sequence; control frames are always accepted by type.
         if raw["type"] in {"connection_state", "gap", "evicted", "subscription_changed"}:
             return True
-        return isinstance(raw.get("sequence"), int) or bool(raw.get("event_id"))
+        # Legacy simulator: sequence / event_id at top level
+        if isinstance(raw.get("sequence"), int) or raw.get("event_id"):
+            return True
+        # Real Switch Core AgentEvent (poll): {type, room_id, payload:{message_id, body, ...}}
+        # Real SSE frame data: same AgentEvent plus optional sequence/position/missed.
+        payload = raw.get("payload") if isinstance(raw.get("payload"), dict) else None
+        if isinstance(raw.get("room_id"), str) and isinstance(payload, dict):
+            if payload.get("body") is not None or payload.get("message_id"):
+                return True
+            return True  # still a well-formed AgentEvent shell (room_join/command)
+        # Legacy simulator data-nested shape
+        data = raw.get("data") if isinstance(raw.get("data"), dict) else None
+        return data is not None

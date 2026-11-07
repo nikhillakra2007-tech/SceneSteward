@@ -36,6 +36,13 @@ Thumbs.db
 logs/
 backend/logs/
 
+# Test artifacts & scratch
+test-results/
+frontend/test-results/
+scratch/
+backend/tools/antigravity/*.exe
+backend/tools/antigravity/*.zip
+
 # Alembic local artifacts
 migrations/versions/__pycache__/
 backend/migrations/versions/__pycache__/

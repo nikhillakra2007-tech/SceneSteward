@@ -19,11 +19,12 @@ test.describe('SceneSteward Comprehensive Product Experience Suite', () => {
 
       // Re-open and test quick persona login
       await loginBtn.click();
-      await page.click('[data-testid="quick-login-olivia"]');
+      await expect(modal).toBeVisible();
+      await modal.locator('button:has-text("olivia@example.com")').click();
 
       // Modal closes and user is authenticated
       await expect(modal).not.toBeVisible();
-      await expect(page.locator('text=Olivia Director')).toBeVisible();
+      await expect(page.locator('text=Olivia Director').first()).toBeVisible();
 
       // Test Logout
       await page.click('[data-testid="logout-btn"]');
@@ -130,7 +131,7 @@ test.describe('SceneSteward Comprehensive Product Experience Suite', () => {
     await expect(page.locator('button:has-text("Overview")').first()).toBeVisible();
     await expect(page.locator('button:has-text("Consent & 15 Categories")')).toBeVisible();
     await expect(page.locator('button:has-text("Reviews & Operations")')).toBeVisible();
-    await expect(page.locator('button:has-text("AI Advisory & Trends")')).toBeVisible();
+    await expect(page.locator('button:has-text("Advisory & Trends")')).toBeVisible();
 
     // Test Export Dialog open and close
     const exportBtn = page.locator('button:has-text("Export Report")');
@@ -150,12 +151,12 @@ test.describe('SceneSteward Comprehensive Product Experience Suite', () => {
     const quickOlivia = page.locator('[data-testid="quick-login-olivia"]');
     if (await quickOlivia.isVisible()) {
       await quickOlivia.click();
-      await expect(page.locator('text=Olivia Director')).toBeVisible();
+      await expect(page.locator('text=Olivia Director').first()).toBeVisible();
 
       // Switch persona to Claire
       await page.click('[data-testid="switch-user-btn"]');
       await page.click('button:has-text("Claire Care")');
-      await expect(page.locator('text=Claire Care')).toBeVisible();
+      await expect(page.locator('text=Claire Care').first()).toBeVisible();
     }
   });
 

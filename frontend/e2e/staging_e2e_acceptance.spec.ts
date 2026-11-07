@@ -16,8 +16,8 @@ test.describe('SceneSteward Staging Acceptance E2E Journey', () => {
 
       // Check preset personas
       await expect(page.locator('text=Preset Personas')).toBeVisible();
-      await expect(page.locator('text=Olivia (Director / Owner)')).toBeVisible();
-      await expect(page.locator('text=Claire (Care Lead)')).toBeVisible();
+      await expect(page.locator('text=Olivia Director')).toBeVisible();
+      await expect(page.locator('text=Claire Care')).toBeVisible();
 
       // Test custom input form
       await page.fill('[data-testid="login-name-input"]', 'Staging Quality Lead');

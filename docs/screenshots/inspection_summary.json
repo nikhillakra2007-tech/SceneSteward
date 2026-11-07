@@ -1,0 +1,44 @@
+{
+  "pagesInspected": [
+    {
+      "route": "/",
+      "status": "PASS",
+      "title": "SceneSteward — Documentary Consent & Ethical Storytelling"
+    },
+    {
+      "route": "/projects",
+      "status": "PASS"
+    },
+    {
+      "route": "/projects/[id]",
+      "status": "PASS"
+    },
+    {
+      "route": "/analytics",
+      "status": "PASS"
+    },
+    {
+      "route": "/participant/[id]",
+      "status": "PASS"
+    }
+  ],
+  "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 422 (Unprocessable Entity)"
+  ],
+  "networkFailures": [
+    {
+      "url": "http://127.0.0.1:8000/api/v1/projects/2821607e-4814-4fed-ace9-186cce6c5c79/participants",
+      "error": "net::ERR_ABORTED"
+    }
+  ],
+  "workflows": [
+    {
+      "name": "Authentication as Olivia Director",
+      "status": "PASS"
+    },
+    {
+      "name": "Project Creation via UI",
+      "status": "PASS"
+    }
+  ]
+}

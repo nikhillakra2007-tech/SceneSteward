@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
   BarChart3,
@@ -61,7 +61,7 @@ export default function AnalyticsPage() {
   const [trendsData, setTrendsData] = useState<TrendsAnalytics | null>(null);
 
   // Compute start_date based on filter
-  const getFilterDates = () => {
+  const getFilterDates = useCallback(() => {
     if (dateFilter === 'all') return { start_date: undefined, end_date: undefined };
     const now = new Date();
     const days = dateFilter === '7d' ? 7 : dateFilter === '30d' ? 30 : 90;
@@ -70,9 +70,9 @@ export default function AnalyticsPage() {
       start_date: start.toISOString(),
       end_date: now.toISOString(),
     };
-  };
+  }, [dateFilter]);
 
-  const loadData = async (isRefresh = false) => {
+  const loadData = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
     setError(null);
@@ -113,11 +113,11 @@ export default function AnalyticsPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [getFilterDates, selectedProjectId]);
 
   useEffect(() => {
     loadData();
-  }, [selectedProjectId, dateFilter]);
+  }, [loadData]);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 pb-16">
