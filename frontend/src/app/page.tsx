@@ -1,10 +1,13 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, ArrowLeft, ArrowUpRight, Play, X, ShieldCheck, ScanLine, Users, Check, Maximize2, MoveHorizontal } from 'lucide-react';
 import { Reveal } from '@/components/Reveal';
 import CursorStage from '@/components/CursorStage';
+import Marquee from '@/components/Marquee';
+import TextReveal from '@/components/TextReveal';
+import Magnetic from '@/components/Magnetic';
 import { useTheme } from '@/lib/theme';
 
 const SCREENS = [
@@ -23,6 +26,34 @@ export default function HomePage() {
 
   const gesture = useRef<{ startX: number; startT: number; lastX: number; lastT: number; width: number; dx: number; moved: boolean } | null>(null);
   const suppressClick = useRef(false);
+  const heroCopyRef = useRef<HTMLDivElement>(null);
+
+  // Gentle hero parallax: the copy drifts up and fades as you scroll away.
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const el = heroCopyRef.current;
+    if (!el) return;
+    let raf = 0;
+    let ticking = false;
+    const update = () => {
+      ticking = false;
+      const y = window.scrollY;
+      const p = Math.min(1, y / 900);
+      el.style.transform = `translate3d(0, ${(y * 0.12).toFixed(1)}px, 0)`;
+      el.style.opacity = (1 - p * 0.85).toFixed(3);
+    };
+    const onScroll = () => {
+      if (!ticking) {
+        ticking = true;
+        raf = requestAnimationFrame(update);
+      }
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      cancelAnimationFrame(raf);
+    };
+  }, []);
 
   const goTo = (i: number) => setActive(Math.max(0, Math.min(SCREENS.length - 1, i)));
 
@@ -67,13 +98,20 @@ export default function HomePage() {
     <div className="product-landing">
       <section className="landing-hero">
         <div className="landing-topline"><span><i /> BUILT FOR DOCUMENTARY TEAMS</span><span>THE PEOPLE BEHIND THE PICTURE</span></div>
-        <div className="hero-copy">
+        <div className="hero-copy" ref={heroCopyRef}>
           <p className="landing-eyebrow">Good stories start with trust.</p>
-          <h1>Every frame has<br />a <em>human story.</em><span className="frame-corner" aria-hidden="true" /></h1>
-          <div className="hero-bottom"><p>Make the film. Keep the promise.<br />Consent, participant care and human review,<br className="desktop-break" /> held together from first interview to final cut.</p><div className="hero-actions"><Link href="/projects" className="landing-button">Open workspace <ArrowUpRight size={17} /></Link><a href="#in-action" className="landing-text-link"><Play size={13} fill="currentColor" /> See it in action</a></div></div>
+          <h1>
+            <span className="h1-line"><span className="h1-inner">Every frame has</span></span>
+            <span className="h1-line"><span className="h1-inner h1-inner-2">a <em>human story.</em></span></span>
+            <span className="frame-corner" aria-hidden="true" />
+          </h1>
+          <div className="hero-bottom"><p>Make the film. Keep the promise.<br />Consent, participant care and human review,<br className="desktop-break" /> held together from first interview to final cut.</p><div className="hero-actions"><Magnetic><Link href="/projects" className="landing-button">Open workspace <ArrowUpRight size={17} /></Link></Magnetic><a href="#in-action" className="landing-text-link"><Play size={13} fill="currentColor" /> See it in action</a></div></div>
         </div>
         <div className="hero-rule"><span>SCENE / STEWARD</span><span>CONSENT IS A CONVERSATION, NOT A CHECKBOX.</span><span>EST. 2026</span></div>
+        <div className="scroll-cue" aria-hidden="true"><span>SCROLL</span><i /></div>
       </section>
+
+      <Marquee items={['SILENCE IS NEVER AGREEMENT', 'CONSENT IS SPECIFIC TO EACH USE', 'A HUMAN MAKES THE FINAL CALL', 'EVERY USE IS ITS OWN QUESTION', 'TRUST IS THE FIRST CREDIT']} />
 
       <Reveal as="section" className="product-stage" delay={60}>
         <div id="in-action" style={{ scrollMarginTop: 90 }} />
@@ -91,6 +129,7 @@ export default function HomePage() {
           <div className="stage-chip chip-consent" aria-hidden="true"><span><i />CONSENT CLEARED · TRAILER V2</span></div>
           <div className="stage-chip chip-window" aria-hidden="true"><span><i />RELEASE WINDOW · FESTIVAL ONLY</span></div>
         </>}>
+        <div className="frame-ring">
         <div className="screen-frame">
           <div className="screen-toolbar"><span className="window-dots"><i /><i /><i /></span><span>scenesteward / {screen.id}</span><button onClick={() => setZoom(screen.id)} aria-label={`Enlarge ${screen.label} screenshot`}><Maximize2 size={14} /><span>Expand</span></button></div>
           <div
@@ -122,18 +161,28 @@ export default function HomePage() {
           </div>
           <div className="screen-caption"><span><i /> ACTUAL FRONTEND CAPTURE</span><span>ILLUSTRATIVE DATA · NOT A LIVE PRODUCTION</span></div>
         </div>
+        </div>
         </CursorStage>
         <div className="screen-explanation" key={screen.id}><span className="section-index">{screen.number} / {screen.label}</span><h3>{screen.title}</h3><p>{screen.body}</p></div>
       </Reveal>
 
-      <section className="promise-section"><Reveal className="promise-intro"><span className="section-index">A CLEAR LINE, AT EVERY STEP</span><h2>Your story can evolve.<br /><em>Consent doesn't travel<br />with it automatically.</em></h2><p>A festival release isn't a streaming release. An interview isn't permission for a synthetic voice. SceneSteward keeps those distinctions in the record.</p></Reveal><div className="promise-list">{[
+      <section className="statement-section">
+        <Reveal><span className="section-index">WHY IT EXISTS</span></Reveal>
+        <TextReveal text="A festival release is not a streaming release. An interview is not permission for a synthetic voice. The record keeps the difference." />
+      </section>
+
+      <section className="promise-section"><Reveal className="promise-intro"><span className="section-index">A CLEAR LINE, AT EVERY STEP</span><h2>Your story can evolve.<br /><em>Consent doesn't travel<br />with it automatically.</em></h2></Reveal><div className="promise-list">{[
         [Users, 'Start with the person.', 'Record what each participant agreed to, declined or still needs to discuss. Keep the original context close.'],
         [ScanLine, 'Check the proposed use.', 'Compare the next trailer, platform or audience against the consent record. Bring differences to the surface.'],
         [ShieldCheck, 'Leave the decision to a human.', 'Advisory findings support the review. Authorized people make the final call and record their reasons.'],
       ].map(([Icon, title, body]: any, i) => <Reveal className="promise-row" key={title} delay={i * 110}><div className="promise-number">0{i + 1}</div><div><Icon size={22} strokeWidth={1.4} /><h3>{title}</h3><p>{body}</p></div></Reveal>)}</div></section>
 
       <Reveal as="section" className="boundary-note"><span className="section-index">THE NON-NEGOTIABLES</span><div><p><Check size={16} /> Silence is never agreement.</p><p><Check size={16} /> Consent is specific to each use.</p><p><Check size={16} /> A human makes the final decision.</p></div></Reveal>
-      <Reveal as="section" className="landing-cta"><span className="section-index">FROM FIRST INTERVIEW TO FINAL CUT</span><h2>Make room for<br /><em>the people in your film.</em></h2><Link href="/projects" className="landing-button">Open your workspace <ArrowRight size={18} /></Link><p>The frontend is ready to explore. Workspace data and actions require your connected backend.</p></Reveal>
+      <Reveal as="section" className="landing-cta"><span className="section-index">FROM FIRST INTERVIEW TO FINAL CUT</span><h2>Make room for<br /><em>the people in your film.</em></h2><Magnetic strength={7}><Link href="/projects" className="landing-button">Open your workspace <ArrowRight size={18} /></Link></Magnetic><p>The frontend is ready to explore. Workspace data and actions require your connected backend.</p></Reveal>
+      <Reveal as="section" className="landing-finale">
+        <div className="finale-wordmark" aria-hidden="true"><svg viewBox="0 0 1160 175" preserveAspectRatio="xMidYMid meet"><text x="580" y="132" textAnchor="middle" textLength="1125" lengthAdjust="spacingAndGlyphs">SCENESTEWARD</text></svg></div>
+        <div className="finale-meta"><span>SCENE / STEWARD</span><span>CONSENT, KEPT IN THE RECORD</span><span>EST. 2026</span></div>
+      </Reveal>
       {zoom && <div className="screenshot-modal" role="dialog" aria-modal="true" aria-label="Product screenshot" onClick={() => setZoom(null)}><button autoFocus onClick={() => setZoom(null)} aria-label="Close screenshot"><X /></button><img src={imgSrc(zoom)} alt="SceneSteward actual frontend with fictional sample data" onClick={e => e.stopPropagation()} onKeyDown={e => {if (e.key === 'Escape') setZoom(null);}} /><p>Actual SceneSteward frontend · Fictional sample data</p></div>}
     </div>
   );
