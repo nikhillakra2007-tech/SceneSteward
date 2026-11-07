@@ -56,7 +56,7 @@ export default function TextReveal({ text, className = '' }: { text: string; cla
       {text.split(' ').map((w, i) => (
         <span className="tr-word" key={i}>
           {w}
-          {'\u00A0'}
+          {' '}
         </span>
       ))}
     </p>

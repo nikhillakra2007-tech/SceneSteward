@@ -12,9 +12,9 @@ import Magnetic from '@/components/Magnetic';
 import { useTheme } from '@/lib/theme';
 
 const SCREENS = [
-  { id: 'workspace', label: 'Production workspace', number: '01', title: 'The whole production. One shared record.', body: 'Keep participants, releases, proposed uses and human reviews together. See what needs attention before a story leaves the edit.' },
-  { id: 'consent', label: 'Participant consent', number: '02', title: 'A yes has boundaries. Keep them visible.', body: 'Track each use separately, from an interview recording to a festival trailer. A declined voice clone stays declined. An unanswered request stays unresolved.' },
-  { id: 'analytics', label: 'Operational intelligence', number: '03', title: 'See the gaps before picture lock.', body: 'Discussion coverage, outstanding reviews and care tasks give your team a practical view of what still needs a conversation.' },
+  { id: 'workspace', label: 'Project overview', number: '01', title: 'Everything about your film in one place.', body: 'See your participants, their release forms, the ways you plan to use their footage, and what still needs a decision.' },
+  { id: 'consent', label: 'Participant consent', number: '02', title: 'See what each person said yes or no to.', body: 'Every use is tracked on its own, like an interview clip, a festival trailer or a voice clone. A "no" stays a "no". No answer yet stays "not decided".' },
+  { id: 'analytics', label: 'Progress and gaps', number: '03', title: 'Spot what is missing before the final edit.', body: 'See which people you have not talked to yet, which reviews are waiting, and which care tasks are open.' },
 ];
 
 export default function HomePage() {
@@ -98,37 +98,47 @@ export default function HomePage() {
   return (
     <div className="product-landing">
       <section className="landing-hero">
-        <div className="landing-topline"><span><i /> BUILT FOR DOCUMENTARY TEAMS</span><span>THE PEOPLE BEHIND THE PICTURE</span></div>
+        <div className="landing-topline"><span><i /> FOR DOCUMENTARY FILM TEAMS</span><span>CONSENT TRACKING</span></div>
         <div className="hero-copy" ref={heroCopyRef}>
-          <p className="landing-eyebrow">Good stories start with trust.</p>
+          <p className="landing-eyebrow">Consent tracking for documentary films</p>
           <h1>
-            <span className="h1-line"><span className="h1-inner">Every frame has</span></span>
-            <span className="h1-line"><span className="h1-inner h1-inner-2">a <em>human story.</em></span></span>
+            <span className="h1-line"><span className="h1-inner">Know what everyone</span></span>
+            <span className="h1-line"><span className="h1-inner h1-inner-2">in your film <em>agreed to.</em></span></span>
             <span className="frame-corner" aria-hidden="true" />
           </h1>
-          <div className="hero-bottom"><p>Make the film. Keep the promise.<br />Consent, participant care and human review,<br className="desktop-break" /> held together from first interview to final cut.</p><div className="hero-actions"><Magnetic><Link href="/projects" className="landing-button">Open workspace <ArrowUpRight size={17} /></Link></Magnetic><a href="#in-action" className="landing-text-link"><Play size={13} fill="currentColor" /> See it in action</a></div></div>
+          <div className="hero-bottom"><p className="hero-lede">SceneSteward keeps a simple record of what each participant said yes or no to. Before you use their footage somewhere new, it checks that record and warns you if they did not agree.</p><div className="hero-actions"><Magnetic><Link href="/projects" className="landing-button">Open workspace <ArrowUpRight size={17} /></Link></Magnetic><a href="#how-it-works" className="landing-text-link"><Play size={13} fill="currentColor" /> See how it works</a></div></div>
         </div>
-        <div className="hero-rule"><span>SCENE / STEWARD</span><span>CONSENT IS A CONVERSATION, NOT A CHECKBOX.</span><span>EST. 2026</span></div>
+        <ul className="hero-facts">
+          <li><b>1</b><span>Write down what each person agreed to</span></li>
+          <li><b>2</b><span>Check every new use of their footage</span></li>
+          <li><b>3</b><span>You make the final call</span></li>
+        </ul>
         <div className="scroll-cue" aria-hidden="true"><span>SCROLL</span><i /></div>
       </section>
 
-      <Marquee items={['SILENCE IS NEVER AGREEMENT', 'CONSENT IS SPECIFIC TO EACH USE', 'A HUMAN MAKES THE FINAL CALL', 'EVERY USE IS ITS OWN QUESTION', 'TRUST IS THE FIRST CREDIT']} />
+      <Marquee items={['SILENCE IS NOT A YES', 'EACH USE NEEDS ITS OWN YES', 'A PERSON MAKES THE FINAL CALL', 'CHECK BEFORE YOU PUBLISH', 'RESPECT THE PEOPLE IN YOUR FILM']} />
+
+      <Reveal as="section" className="how-section"><div id="how-it-works" style={{ scrollMarginTop: 90 }} /><span className="section-index">HOW IT WORKS</span><h2>Three simple steps.</h2><ol className="how-steps">{[
+        [Users, 'Record what people agreed to', 'For each participant, note what they said yes to, what they said no to, and what is still undecided. Keep their original words close by.'],
+        [ScanLine, 'Check each new use', 'Planning a trailer, a social post or a new audience? SceneSteward compares it with what the person agreed to and points out any mismatch.'],
+        [ShieldCheck, 'You decide', 'SceneSteward only suggests. A real person on your team makes the final decision and writes down why.'],
+      ].map(([Icon, title, body]: any, i) => <li className="how-step" key={title} style={{ ['--i' as any]: i }}><div className="how-icon"><Icon size={24} strokeWidth={1.5} /></div><span className="how-num">Step {i + 1}</span><h3>{title}</h3><p>{body}</p></li>)}</ol></Reveal>
 
       <Reveal as="section" className="product-stage" delay={60}>
         <div id="in-action" style={{ scrollMarginTop: 90 }} />
-        <div className="stage-heading"><div><span className="section-index">INSIDE SCENESTEWARD</span><h2>Less chasing paperwork.<br /><em>More caring for people.</em></h2></div><p>Explore the actual interface.<br />Move across it - hover, swipe or drag.<br />Screens use fictional sample data.</p></div>
+        <div className="stage-heading"><div><span className="section-index">THE APP</span><h2>See what it looks like.<br /><em>Click, swipe or use the arrows.</em></h2></div><p>These are real screens from the app, filled with made-up sample data.</p></div>
         <div className="screen-controls">
           <div className="screen-progress" aria-hidden="true"><span>{screen.number} / 0{SCREENS.length}</span><span className="bar"><i style={{ width: `${((active + 1) / SCREENS.length) * 100}%` }} /></span><span className="screen-progress-label">{screen.label}</span></div>
-          <div className="screen-hint" aria-hidden="true"><MoveHorizontal size={13} /><span>HOVER · DRAG · SWIPE</span></div>
+          <div className="screen-hint" aria-hidden="true"><MoveHorizontal size={13} /><span>DRAG OR SWIPE</span></div>
           <div className="screen-arrows">
             <button type="button" onClick={() => goTo(active - 1)} disabled={active === 0} aria-label="Previous screenshot"><ArrowLeft size={15} /></button>
             <button type="button" onClick={() => goTo(active + 1)} disabled={active === SCREENS.length - 1} aria-label="Next screenshot"><ArrowRight size={15} /></button>
           </div>
         </div>
         <CursorStage overlays={<>
-          <div className="stage-chip chip-review" aria-hidden="true"><span><i />HUMAN REVIEW · PENDING</span></div>
-          <div className="stage-chip chip-consent" aria-hidden="true"><span><i />CONSENT CLEARED · TRAILER V2</span></div>
-          <div className="stage-chip chip-window" aria-hidden="true"><span><i />RELEASE WINDOW · FESTIVAL ONLY</span></div>
+          <div className="stage-chip chip-review" aria-hidden="true"><span><i />WAITING FOR REVIEW</span></div>
+          <div className="stage-chip chip-consent" aria-hidden="true"><span><i />OK TO USE IN TRAILER</span></div>
+          <div className="stage-chip chip-window" aria-hidden="true"><span><i />FESTIVALS ONLY</span></div>
         </>}>
         <div className="frame-ring">
         <div className="screen-frame">
@@ -160,7 +170,7 @@ export default function HomePage() {
               ))}
             </div>
           </div>
-          <div className="screen-caption"><span><i /> ACTUAL FRONTEND CAPTURE</span><span>ILLUSTRATIVE DATA · NOT A LIVE PRODUCTION</span></div>
+          <div className="screen-caption"><span><i /> REAL SCREENSHOT</span><span>SAMPLE DATA ONLY</span></div>
         </div>
         </div>
         </CursorStage>
@@ -168,21 +178,17 @@ export default function HomePage() {
       </Reveal>
 
       <section className="statement-section">
-        <Reveal><span className="section-index">WHY IT EXISTS</span></Reveal>
-        <TextReveal text="A festival release is not a streaming release. An interview is not permission for a synthetic voice. The record keeps the difference." />
+        <Reveal><span className="section-index">A QUICK EXAMPLE</span></Reveal>
+        <TextReveal text="Maria agreed to be in your film for festivals. If someone wants her clip in an online ad, that is a new question. SceneSteward shows you the difference." />
       </section>
 
-      <section className="promise-section"><Reveal className="promise-intro"><span className="section-index">A CLEAR LINE, AT EVERY STEP</span><h2>Your story can evolve.<br /><em>Consent doesn&rsquo;t travel<br />with it automatically.</em></h2></Reveal><div className="promise-list">{[
-        [Users, 'Start with the person.', 'Record what each participant agreed to, declined or still needs to discuss. Keep the original context close.'],
-        [ScanLine, 'Check the proposed use.', 'Compare the next trailer, platform or audience against the consent record. Bring differences to the surface.'],
-        [ShieldCheck, 'Leave the decision to a human.', 'Advisory findings support the review. Authorized people make the final call and record their reasons.'],
-      ].map(([Icon, title, body]: any, i) => <Reveal className="promise-row" key={title} delay={i * 110}><div className="promise-number">0{i + 1}</div><div><Icon size={22} strokeWidth={1.4} /><h3>{title}</h3><p>{body}</p></div></Reveal>)}</div></section>
+      
 
-      <Reveal as="section" className="boundary-note"><span className="section-index">THE NON-NEGOTIABLES</span><div><p><Check size={16} /> Silence is never agreement.</p><p><Check size={16} /> Consent is specific to each use.</p><p><Check size={16} /> A human makes the final decision.</p></div></Reveal>
-      <Reveal as="section" className="landing-cta"><span className="section-index">FROM FIRST INTERVIEW TO FINAL CUT</span><h2>Make room for<br /><em>the people in your film.</em></h2><Magnetic strength={7}><Link href="/projects" className="landing-button">Open your workspace <ArrowRight size={18} /></Link></Magnetic><p>The frontend is ready to explore. Workspace data and actions require your connected backend.</p></Reveal>
+      <Reveal as="section" className="boundary-note"><span className="section-index">OUR THREE RULES</span><div><p><Check size={16} /> No answer is not a yes.</p><p><Check size={16} /> Each use needs its own yes.</p><p><Check size={16} /> A person makes the final decision.</p></div></Reveal>
+      <Reveal as="section" className="landing-cta"><span className="section-index">READY TO TRY IT?</span><h2>Keep every promise<br /><em>you made on camera.</em></h2><Magnetic strength={7}><Link href="/projects" className="landing-button">Open your workspace <ArrowRight size={18} /></Link></Magnetic><p>Open the workspace to explore. Saving real project data needs the backend connected.</p></Reveal>
       <Reveal as="section" className="landing-finale">
         <div className="finale-wordmark" aria-hidden="true"><svg viewBox="0 0 1160 175" preserveAspectRatio="xMidYMid meet"><text x="580" y="132" textAnchor="middle" textLength="1125" lengthAdjust="spacingAndGlyphs">SCENESTEWARD</text></svg></div>
-        <div className="finale-meta"><span>SCENE / STEWARD</span><span>CONSENT, KEPT IN THE RECORD</span><span>EST. 2026</span></div>
+        <div className="finale-meta"><span>SCENE / STEWARD</span><span>CONSENT, WRITTEN DOWN</span><span>2026</span></div>
       </Reveal>
       {zoom && <div className="screenshot-modal" role="dialog" aria-modal="true" aria-label="Product screenshot" onClick={() => setZoom(null)}><button autoFocus onClick={() => setZoom(null)} aria-label="Close screenshot"><X /></button><Image src={imgSrc(zoom)} alt="SceneSteward actual frontend with fictional sample data" width={1440} height={1000} onClick={e => e.stopPropagation()} onKeyDown={e => {if (e.key === 'Escape') setZoom(null);}} unoptimized /><p>Actual SceneSteward frontend · Fictional sample data</p></div>}
     </div>
