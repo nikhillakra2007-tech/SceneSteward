@@ -23,6 +23,8 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--connection-id", default=None)
     parser.add_argument("--max-retries", type=int, default=None)
+    parser.add_argument("--mode", choices=["poll", "sse"], default="poll",
+                        help="poll = contract-stable long-poll (default); sse = compatibility stream")
     args = parser.parse_args()
 
     s = get_settings()
@@ -33,8 +35,11 @@ def main() -> int:
     listener = SwitchEventListener(get_session_factory,
                                    connection_id=args.connection_id,
                                    max_retries=args.max_retries)
-    print(f"Switch listener starting; connection_id={listener.connection_id}")
-    listener.run_forever()
+    print(f"Switch listener starting mode={args.mode}; connection_id={listener.connection_id}", flush=True)
+    if args.mode == "sse":
+        listener.run_forever()
+    else:
+        listener.run_poll_forever()
     return 0
 
 

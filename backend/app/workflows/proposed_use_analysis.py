@@ -250,14 +250,22 @@ def run_agents(db, *, proposed_use, project_id, participant, story_element,
 
 def maybe_notify_switch(db, *, project_id, participant_id, proposed_use, result,
                         missing, declined, correlation_id) -> dict[str, str]:
+    # Prefer the most recently linked room. Mission 43 left stale links pointing at the
+    # local simulator room (e.g. "room-clearance-001"), which do not exist on the actual
+    # Switch Core and cause a 404 ("Room not found") on the secondary review-context post.
+    # Newest-first guarantees the link created for the real room wins.
     link = (
         db.query(SwitchRoomLink)
         .filter(SwitchRoomLink.project_id == project_id,
                 SwitchRoomLink.participant_id == participant_id,
                 SwitchRoomLink.room_type == "participant_review")
+        .order_by(SwitchRoomLink.created_at.desc())
         .first()
-        or db.query(SwitchRoomLink).filter(SwitchRoomLink.project_id == project_id,
-                                           SwitchRoomLink.room_type == "project").first()
+        or db.query(SwitchRoomLink)
+        .filter(SwitchRoomLink.project_id == project_id,
+                SwitchRoomLink.room_type == "project")
+        .order_by(SwitchRoomLink.created_at.desc())
+        .first()
     )
     if link is None:
         return {"status": "not_linked", "detail": "No Switch room linked for this scope; nothing sent."}
