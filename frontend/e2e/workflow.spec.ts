@@ -7,7 +7,7 @@ test.describe('SceneSteward Documentary Ethics & Consent Workflow', () => {
     await expect(page.locator('h1')).toBeVisible();
 
     // 2. Navigate to Projects Workspace
-    await page.click('text=View Projects');
+    await page.click('a[href="/projects"]');
     await expect(page).toHaveURL(/\/projects/);
 
     // 3. View Participant Portal Mock
