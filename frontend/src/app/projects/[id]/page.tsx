@@ -374,13 +374,15 @@ export default function ProjectWorkspacePage() {
         file_size: uploadFile.size,
       });
 
-      await fetch(target.upload_url, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': uploadFile.type || 'application/pdf',
-        },
-        body: uploadFile,
-      });
+      if (!target.upload_url.startsWith('local:')) {
+        await fetch(target.upload_url, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': uploadFile.type || 'application/pdf',
+          },
+          body: uploadFile,
+        });
+      }
 
       await api.completeUpload(docPartId, {
         storage_key: target.storage_key,

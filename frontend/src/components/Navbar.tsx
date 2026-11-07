@@ -8,11 +8,12 @@ import { api, getAuthToken, User } from '@/lib/api';
 import { useToast } from '@/components/Toast';
 import { toggleTheme, useTheme } from '@/lib/theme';
 
-const ROLE_PRESETS = [
-  { label: 'Olivia (Director / Owner)', email: 'olivia@example.com', name: 'Olivia Director' },
-  { label: 'Claire (Care Lead)', email: 'claire@example.com', name: 'Claire Care' },
-  { label: 'Marcus (Producer)', email: 'marcus@example.com', name: 'Marcus Producer' },
-  { label: 'Elena (Legal Counsel)', email: 'elena@example.com', name: 'Elena Legal' },
+const ROLE_OPTIONS = [
+  { value: 'project_owner', label: 'Project owner' },
+  { value: 'director', label: 'Director' },
+  { value: 'producer', label: 'Producer' },
+  { value: 'care_lead', label: 'Care lead' },
+  { value: 'legal_counsel', label: 'Legal counsel' },
 ];
 
 function NavLink({
@@ -57,6 +58,7 @@ export function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [customEmail, setCustomEmail] = useState('');
   const [customName, setCustomName] = useState('');
+  const [customRole, setCustomRole] = useState('director');
   const [authError, setAuthError] = useState<string | null>(null);
 
   const fetchUser = useCallback(async () => {
@@ -88,16 +90,16 @@ export function Navbar() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [modalOpen, mobileMenuOpen]);
 
-  const handleDevLogin = async (email: string, name: string) => {
+  const handleDevLogin = async (email: string, name: string, role: string) => {
     setLoading(true);
     setAuthError(null);
     try {
-      await api.loginDev(email, name);
-      await fetchUser();
+      await api.loginDev(email, name, role);
       setModalOpen(false);
       setCustomEmail('');
       setCustomName('');
       success(`Signed in as ${name}`);
+      window.location.href = '/projects';
     } catch (err: any) {
       setAuthError(err.message || 'Login failed');
       toastError(err.message || 'Login failed');
@@ -133,6 +135,7 @@ export function Navbar() {
                 </div>
               </Link>
 
+              {currentUser && (
               <nav className="hidden md:flex items-center gap-1" aria-label="Main Navigation">
                 <NavLink href="/projects" active={!!pathname?.startsWith('/projects')} icon={Film}>
                   Projects
@@ -141,6 +144,7 @@ export function Navbar() {
                   Analytics
                 </NavLink>
               </nav>
+              )}
             </div>
 
             <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
@@ -179,37 +183,16 @@ export function Navbar() {
                   </button>
                 </div>
               ) : (
-                <div className="flex items-center gap-2">
-                  <span className="hidden lg:inline font-mono text-[10px] uppercase tracking-[0.18em] text-slate-500">
-                    Quick dev
-                  </span>
-                  <button
-                    disabled={loading}
-                    data-testid="quick-login-olivia"
-                    onClick={() => handleDevLogin('olivia@example.com', 'Olivia Director')}
-                    className="hidden sm:inline-block shrink-0 whitespace-nowrap rounded-md bg-emerald-600 px-2 sm:px-2.5 py-1.5 text-xs font-semibold text-emerald-50 transition hover:bg-emerald-500 disabled:opacity-50"
-                  >
-                    <span className="hidden sm:inline">Olivia (Director)</span>
-                  </button>
-                  <button
-                    disabled={loading}
-                    data-testid="quick-login-claire"
-                    onClick={() => handleDevLogin('claire@example.com', 'Claire Care')}
-                    className="hidden sm:inline-block rounded-md border border-slate-700 px-2.5 py-1.5 text-xs font-medium text-slate-300 transition hover:border-slate-500 hover:text-slate-100 disabled:opacity-50"
-                  >
-                    Claire (Care)
-                  </button>
-                  <button
-                    onClick={() => setModalOpen(true)}
-                    title="Sign in or switch user"
-                    aria-label="Sign in or switch user"
-                    data-testid="custom-login-btn"
-                    className="flex items-center gap-1.5 rounded-md border border-brass-500/40 px-2 sm:px-2.5 py-1.5 text-xs font-medium text-brass-400 transition hover:border-brass-400 hover:text-brass-300"
-                  >
-                    <LogIn className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Custom / Switch</span>
-                  </button>
-                </div>
+                <button
+                  onClick={() => setModalOpen(true)}
+                  title="Sign in"
+                  aria-label="Sign in"
+                  data-testid="custom-login-btn"
+                  className="flex items-center gap-1.5 rounded-md border border-brass-500/40 px-3 py-1.5 text-xs font-semibold text-brass-400 transition hover:border-brass-400 hover:text-brass-300"
+                >
+                  <LogIn className="h-3.5 w-3.5" />
+                  <span>Sign in</span>
+                </button>
               )}
 
               <button
@@ -227,30 +210,34 @@ export function Navbar() {
 
         {mobileMenuOpen && (
           <div className="md:hidden border-t border-slate-800 bg-slate-950/95 backdrop-blur px-4 pt-3 pb-4 space-y-1.5 animate-in slide-in-from-top-2">
-            <Link
-              href="/projects"
-              onClick={() => setMobileMenuOpen(false)}
-              className={`flex items-center gap-2.5 rounded-md px-3 py-2.5 text-sm font-medium transition ${
-                pathname?.startsWith('/projects')
-                  ? 'bg-slate-850 text-brass-400'
-                  : 'text-slate-300 hover:bg-slate-850'
-              }`}
-            >
-              <Film className="h-4 w-4" />
-              <span>Projects</span>
-            </Link>
-            <Link
-              href="/analytics"
-              onClick={() => setMobileMenuOpen(false)}
-              className={`flex items-center gap-2.5 rounded-md px-3 py-2.5 text-sm font-medium transition ${
-                pathname?.startsWith('/analytics')
-                  ? 'bg-slate-850 text-brass-400'
-                  : 'text-slate-300 hover:bg-slate-850'
-              }`}
-            >
-              <BarChart3 className="h-4 w-4" />
-              <span>Analytics</span>
-            </Link>
+            {currentUser && (
+              <>
+                <Link
+                  href="/projects"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={`flex items-center gap-2.5 rounded-md px-3 py-2.5 text-sm font-medium transition ${
+                    pathname?.startsWith('/projects')
+                      ? 'bg-slate-850 text-brass-400'
+                      : 'text-slate-300 hover:bg-slate-850'
+                  }`}
+                >
+                  <Film className="h-4 w-4" />
+                  <span>Projects</span>
+                </Link>
+                <Link
+                  href="/analytics"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={`flex items-center gap-2.5 rounded-md px-3 py-2.5 text-sm font-medium transition ${
+                    pathname?.startsWith('/analytics')
+                      ? 'bg-slate-850 text-brass-400'
+                      : 'text-slate-300 hover:bg-slate-850'
+                  }`}
+                >
+                  <BarChart3 className="h-4 w-4" />
+                  <span>Analytics</span>
+                </Link>
+              </>
+            )}
             {currentUser && (
               <div className="border-t border-slate-800 px-3 pt-2.5 text-xs text-slate-400">
                 Signed in as <span className="font-semibold text-slate-200">{currentUser.full_name}</span>{' '}
@@ -274,7 +261,7 @@ export function Navbar() {
               <div className="flex items-center gap-2.5">
                 <UserCircle className="h-5 w-5 text-brass-400" />
                 <h3 id="auth-modal-title" className="font-display text-lg font-semibold text-slate-50">
-                  {currentUser ? 'Switch User / Persona' : 'Sign In or Register'}
+                  {currentUser ? 'Switch role' : 'Sign in'}
                 </h3>
               </div>
               <button
@@ -292,45 +279,18 @@ export function Navbar() {
               </div>
             )}
 
-            <div className="mt-5">
-              <p className="ss-kicker mb-2.5">Preset personas</p>
-              <div className="grid grid-cols-2 gap-2">
-                {ROLE_PRESETS.map((preset) => (
-                  <button
-                    key={preset.email}
-                    type="button"
-                    disabled={loading}
-                    onClick={() => handleDevLogin(preset.email, preset.name)}
-                    className="group rounded-md border border-slate-700 bg-slate-850 p-2.5 text-left transition hover:border-brass-500/50"
-                  >
-                    <div className="text-xs font-semibold text-slate-200 group-hover:text-brass-300">
-                      {preset.name}
-                    </div>
-                    <div className="truncate font-mono text-[10px] text-slate-500">{preset.email}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="relative my-5">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-slate-800" />
-              </div>
-              <div className="relative flex justify-center">
-                <span className="bg-slate-900 px-3 font-mono text-[10px] uppercase tracking-[0.2em] text-slate-500">
-                  Or custom identity
-                </span>
-              </div>
-            </div>
+            <p className="mt-4 text-xs text-slate-400">
+              Choose your name, email and the role you need. Your workspace runs entirely in this browser.
+            </p>
 
             <form
               onSubmit={(e) => {
                 e.preventDefault();
                 if (customEmail.trim() && customName.trim()) {
-                  handleDevLogin(customEmail.trim(), customName.trim());
+                  handleDevLogin(customEmail.trim(), customName.trim(), customRole);
                 }
               }}
-              className="space-y-3.5"
+              className="mt-4 space-y-3.5"
             >
               <div>
                 <label htmlFor="login-name-input" className="mb-1.5 block text-xs font-medium text-slate-300">
@@ -364,6 +324,25 @@ export function Navbar() {
                 />
               </div>
 
+              <div>
+                <label htmlFor="login-role-select" className="mb-1.5 block text-xs font-medium text-slate-300">
+                  Role
+                </label>
+                <select
+                  id="login-role-select"
+                  data-testid="login-role-select"
+                  value={customRole}
+                  onChange={(e) => setCustomRole(e.target.value)}
+                  className="ss-input"
+                >
+                  {ROLE_OPTIONS.map((r) => (
+                    <option key={r.value} value={r.value}>
+                      {r.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
@@ -378,7 +357,7 @@ export function Navbar() {
                   data-testid="login-submit-btn"
                   className="ss-btn-primary px-4 py-1.5 text-xs"
                 >
-                  {loading ? 'Authenticating...' : 'Sign In / Register'}
+                  {loading ? 'Signing in...' : currentUser ? 'Switch role' : 'Sign in'}
                 </button>
               </div>
             </form>

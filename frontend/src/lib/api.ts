@@ -234,51 +234,43 @@ export function removeAuthToken(): void {
   localStorage.removeItem('scenesteward_token');
 }
 
+import { handleLocalRequest, LocalApiError } from './local-backend';
+
 export async function apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const token = getAuthToken();
   const headers = new Headers(options.headers || {});
-  
+
   if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
   }
-  
-  if (token && !headers.has('Authorization')) {
-    headers.set('Authorization', `Bearer ${token}`);
-  }
 
-  const url = endpoint.startsWith('http') ? endpoint : `${API_BASE}${endpoint}`;
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
-
-  if (!response.ok) {
-    let errMessage = `HTTP ${response.status}: ${response.statusText}`;
+  const authHeader = token ? `Bearer ${token}` : (headers.get('Authorization') || null);
+  const method = (options.method || 'GET').toUpperCase();
+  let parsedBody: any = null;
+  if (typeof options.body === 'string' && options.body) {
     try {
-      const errJson = await response.json();
-      if (errJson.detail) {
-        errMessage = typeof errJson.detail === 'string' ? errJson.detail : JSON.stringify(errJson.detail);
-      }
+      parsedBody = JSON.parse(options.body);
     } catch {
-      // ignore
+      parsedBody = options.body;
     }
-    throw new Error(errMessage);
   }
 
-  // Handle empty responses
-  const contentType = response.headers.get('content-type');
-  if (contentType && contentType.includes('application/json')) {
-    return response.json();
+  try {
+    return (await handleLocalRequest(method, endpoint, parsedBody, authHeader)) as T;
+  } catch (err) {
+    if (err instanceof LocalApiError) {
+      throw new Error(err.message);
+    }
+    throw err;
   }
-  return {} as T;
 }
 
 export const api = {
   // Auth
-  async loginDev(email: string, name: string): Promise<{ access_token: string }> {
+  async loginDev(email: string, name: string, role?: string): Promise<{ access_token: string }> {
     const res = await apiFetch<{ access_token: string }>('/api/v1/auth/dev-token', {
       method: 'POST',
-      body: JSON.stringify({ email, name }),
+      body: JSON.stringify({ email, name, role }),
     });
     setAuthToken(res.access_token);
     return res;
