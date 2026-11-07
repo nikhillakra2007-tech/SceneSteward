@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ShieldCheck, Film, BarChart3, LogOut, UserCircle, LogIn, ArrowRightLeft, X, Menu } from 'lucide-react';
+import { Clapperboard, Film, BarChart3, LogOut, UserCircle, LogIn, ArrowRightLeft, X, Menu } from 'lucide-react';
 import { api, getAuthToken, User } from '@/lib/api';
 import { useToast } from '@/components/Toast';
 
@@ -13,6 +13,38 @@ const ROLE_PRESETS = [
   { label: 'Marcus (Producer)', email: 'marcus@example.com', name: 'Marcus Producer' },
   { label: 'Elena (Legal Counsel)', email: 'elena@example.com', name: 'Elena Legal' },
 ];
+
+function NavLink({
+  href,
+  active,
+  icon: Icon,
+  children,
+  onClick,
+}: {
+  href: string;
+  active: boolean;
+  icon: React.ComponentType<{ className?: string }>;
+  children: React.ReactNode;
+  onClick?: () => void;
+}) {
+  return (
+    <Link
+      href={href}
+      onClick={onClick}
+      className={`group relative flex items-center gap-2 px-3 py-2 text-[13px] font-medium tracking-wide transition ${
+        active ? 'text-brass-400' : 'text-slate-400 hover:text-slate-100'
+      }`}
+    >
+      <Icon className={`h-4 w-4 transition ${active ? 'text-brass-400' : 'text-slate-500 group-hover:text-slate-300'}`} />
+      <span>{children}</span>
+      <span
+        className={`absolute inset-x-3 -bottom-[13px] h-px bg-brass-500 transition-opacity ${
+          active ? 'opacity-100' : 'opacity-0 group-hover:opacity-40'
+        }`}
+      />
+    </Link>
+  );
+}
 
 export function Navbar() {
   const pathname = usePathname();
@@ -43,7 +75,6 @@ export function Navbar() {
     setMobileMenuOpen(false);
   }, [pathname, fetchUser]);
 
-  // Handle escape key
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -82,64 +113,46 @@ export function Navbar() {
 
   return (
     <>
-      <header className="border-b border-slate-800 bg-slate-900/90 backdrop-blur sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <header className="sticky top-0 z-40 border-b border-slate-800/90 bg-slate-950/85 backdrop-blur-md">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            <div className="flex items-center space-x-6">
-              <Link href="/" className="flex items-center space-x-2.5">
-                <div className="h-9 w-9 rounded-lg bg-emerald-600/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
-                  <ShieldCheck className="h-5 w-5" />
+            <div className="flex items-center gap-8">
+              <Link href="/" className="group flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-md border border-brass-500/50 bg-gradient-to-b from-brass-500/15 to-transparent text-brass-400 transition group-hover:border-brass-400">
+                  <Clapperboard className="h-[18px] w-[18px]" />
                 </div>
-                <div>
-                  <span className="text-base font-bold text-slate-100 tracking-tight">SceneSteward</span>
-                  <span className="hidden sm:inline-block ml-2 text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
+                <div className="flex flex-col justify-center">
+                  <span className="font-display text-[17px] font-semibold leading-none tracking-tight text-slate-50">
+                    SceneSteward
+                  </span>
+                  <span className="mt-1 hidden font-mono text-[9px] uppercase leading-none tracking-[0.24em] text-slate-500 sm:block">
                     Documentary Ethics &amp; Consent
                   </span>
                 </div>
               </Link>
 
-              <nav className="hidden md:flex space-x-1" aria-label="Main Navigation">
-                <Link
-                  href="/projects"
-                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition ${
-                    pathname?.startsWith('/projects')
-                      ? 'bg-slate-800 text-emerald-400'
-                      : 'text-slate-300 hover:text-slate-100 hover:bg-slate-800/50'
-                  }`}
-                >
-                  <div className="flex items-center space-x-1.5">
-                    <Film className="h-4 w-4" />
-                    <span>Projects</span>
-                  </div>
-                </Link>
-                <Link
-                  href="/analytics"
-                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition ${
-                    pathname?.startsWith('/analytics')
-                      ? 'bg-slate-800 text-emerald-400'
-                      : 'text-slate-300 hover:text-slate-100 hover:bg-slate-800/50'
-                  }`}
-                >
-                  <div className="flex items-center space-x-1.5">
-                    <BarChart3 className="h-4 w-4" />
-                    <span>Analytics</span>
-                  </div>
-                </Link>
+              <nav className="hidden md:flex items-center gap-1" aria-label="Main Navigation">
+                <NavLink href="/projects" active={!!pathname?.startsWith('/projects')} icon={Film}>
+                  Projects
+                </NavLink>
+                <NavLink href="/analytics" active={!!pathname?.startsWith('/analytics')} icon={BarChart3}>
+                  Analytics
+                </NavLink>
               </nav>
             </div>
 
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center gap-2.5">
               {currentUser ? (
-                <div className="flex items-center space-x-3">
-                  <div className="text-right hidden sm:block">
+                <div className="flex items-center gap-2.5">
+                  <div className="text-right hidden sm:block leading-tight">
                     <div className="text-xs font-semibold text-slate-200">{currentUser.full_name}</div>
-                    <div className="text-[11px] text-emerald-400">{currentUser.email}</div>
+                    <div className="font-mono text-[10px] text-emerald-400">{currentUser.email}</div>
                   </div>
                   <button
                     onClick={() => setModalOpen(true)}
                     title="Switch User / Role"
                     data-testid="switch-user-btn"
-                    className="p-1.5 rounded-lg border border-slate-700 text-slate-400 hover:text-emerald-400 hover:bg-slate-800 transition flex items-center gap-1.5 text-xs px-2.5"
+                    className="flex items-center gap-1.5 rounded-md border border-slate-700 px-2.5 py-1.5 text-xs text-slate-400 transition hover:border-brass-500/50 hover:text-brass-400"
                   >
                     <ArrowRightLeft className="h-3.5 w-3.5" />
                     <span className="hidden md:inline">Switch</span>
@@ -148,34 +161,37 @@ export function Navbar() {
                     onClick={handleLogout}
                     title="Logout"
                     data-testid="logout-btn"
-                    className="p-1.5 rounded-lg border border-slate-700 text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition"
+                    className="rounded-md border border-slate-700 p-1.5 text-slate-400 transition hover:border-rose-500/50 hover:text-rose-400"
                   >
                     <LogOut className="h-4 w-4" />
                   </button>
                 </div>
               ) : (
-                <div className="flex items-center space-x-2">
-                  <span className="text-xs text-slate-400 hidden lg:inline">Quick Dev:</span>
+                <div className="flex items-center gap-2">
+                  <span className="hidden lg:inline font-mono text-[10px] uppercase tracking-[0.18em] text-slate-500">
+                    Quick dev
+                  </span>
                   <button
                     disabled={loading}
                     data-testid="quick-login-olivia"
                     onClick={() => handleDevLogin('olivia@example.com', 'Olivia Director')}
-                    className="text-xs px-2.5 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-medium transition disabled:opacity-50"
+                    className="shrink-0 whitespace-nowrap rounded-md bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-emerald-50 transition hover:bg-emerald-500 disabled:opacity-50"
                   >
-                    Olivia (Director)
+                    <span className="sm:hidden">Olivia</span>
+                    <span className="hidden sm:inline">Olivia (Director)</span>
                   </button>
                   <button
                     disabled={loading}
                     data-testid="quick-login-claire"
                     onClick={() => handleDevLogin('claire@example.com', 'Claire Care')}
-                    className="text-xs px-2.5 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-medium transition disabled:opacity-50 hidden sm:inline-block"
+                    className="hidden sm:inline-block rounded-md border border-slate-700 px-2.5 py-1.5 text-xs font-medium text-slate-300 transition hover:border-slate-500 hover:text-slate-100 disabled:opacity-50"
                   >
                     Claire (Care)
                   </button>
                   <button
                     onClick={() => setModalOpen(true)}
                     data-testid="custom-login-btn"
-                    className="text-xs px-2.5 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-emerald-500/40 font-medium transition flex items-center gap-1.5"
+                    className="flex items-center gap-1.5 rounded-md border border-brass-500/40 px-2.5 py-1.5 text-xs font-medium text-brass-400 transition hover:border-brass-400 hover:text-brass-300"
                   >
                     <LogIn className="h-3.5 w-3.5" />
                     <span className="hidden sm:inline">Custom / Switch</span>
@@ -184,11 +200,10 @@ export function Navbar() {
                 </div>
               )}
 
-              {/* Mobile Menu Hamburger Button */}
               <button
                 type="button"
                 onClick={() => setMobileMenuOpen((prev) => !prev)}
-                className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition md:hidden"
+                className="rounded-md p-2 text-slate-400 transition hover:bg-slate-800 hover:text-white md:hidden"
                 aria-label="Toggle navigation menu"
                 aria-expanded={mobileMenuOpen}
               >
@@ -198,16 +213,15 @@ export function Navbar() {
           </div>
         </div>
 
-        {/* Mobile Navigation Drawer */}
         {mobileMenuOpen && (
-          <div className="md:hidden border-t border-slate-800 bg-slate-900/95 backdrop-blur px-4 pt-3 pb-4 space-y-2 animate-in slide-in-from-top-2">
+          <div className="md:hidden border-t border-slate-800 bg-slate-950/95 backdrop-blur px-4 pt-3 pb-4 space-y-1.5 animate-in slide-in-from-top-2">
             <Link
               href="/projects"
               onClick={() => setMobileMenuOpen(false)}
-              className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition ${
+              className={`flex items-center gap-2.5 rounded-md px-3 py-2.5 text-sm font-medium transition ${
                 pathname?.startsWith('/projects')
-                  ? 'bg-slate-800 text-emerald-400 font-semibold'
-                  : 'text-slate-300 hover:bg-slate-800/60'
+                  ? 'bg-slate-850 text-brass-400'
+                  : 'text-slate-300 hover:bg-slate-850'
               }`}
             >
               <Film className="h-4 w-4" />
@@ -216,44 +230,44 @@ export function Navbar() {
             <Link
               href="/analytics"
               onClick={() => setMobileMenuOpen(false)}
-              className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition ${
+              className={`flex items-center gap-2.5 rounded-md px-3 py-2.5 text-sm font-medium transition ${
                 pathname?.startsWith('/analytics')
-                  ? 'bg-slate-800 text-emerald-400 font-semibold'
-                  : 'text-slate-300 hover:bg-slate-800/60'
+                  ? 'bg-slate-850 text-brass-400'
+                  : 'text-slate-300 hover:bg-slate-850'
               }`}
             >
               <BarChart3 className="h-4 w-4" />
               <span>Analytics</span>
             </Link>
             {currentUser && (
-              <div className="pt-2 border-t border-slate-800 text-xs text-slate-400 px-3">
-                Signed in as <span className="text-slate-200 font-semibold">{currentUser.full_name}</span> ({currentUser.email})
+              <div className="border-t border-slate-800 px-3 pt-2.5 text-xs text-slate-400">
+                Signed in as <span className="font-semibold text-slate-200">{currentUser.full_name}</span>{' '}
+                <span className="font-mono text-[10px]">({currentUser.email})</span>
               </div>
             )}
           </div>
         )}
       </header>
 
-      {/* Identity Switching & Registration Modal */}
       {modalOpen && (
         <div
           data-testid="auth-modal"
           role="dialog"
           aria-modal="true"
           aria-labelledby="auth-modal-title"
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
         >
-          <div className="relative w-full max-w-md rounded-xl bg-slate-900 border border-slate-700 p-6 shadow-2xl">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
-              <div className="flex items-center gap-2">
-                <UserCircle className="h-5 w-5 text-emerald-400" />
-                <h3 id="auth-modal-title" className="text-base font-semibold text-slate-100">
+          <div className="relative w-full max-w-md rounded-lg border border-slate-700 bg-slate-900 p-6 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <div className="flex items-center gap-2.5">
+                <UserCircle className="h-5 w-5 text-brass-400" />
+                <h3 id="auth-modal-title" className="font-display text-lg font-semibold text-slate-50">
                   {currentUser ? 'Switch User / Persona' : 'Sign In or Register'}
                 </h3>
               </div>
               <button
                 onClick={() => setModalOpen(false)}
-                className="text-slate-400 hover:text-slate-200 transition p-1"
+                className="p-1 text-slate-400 transition hover:text-slate-200"
                 aria-label="Close dialog"
               >
                 <X className="h-5 w-5" />
@@ -261,14 +275,13 @@ export function Navbar() {
             </div>
 
             {authError && (
-              <div className="mt-4 p-3 rounded bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs">
+              <div className="mt-4 rounded-md border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-400">
                 {authError}
               </div>
             )}
 
-            {/* Quick Role Presets */}
-            <div className="mt-4">
-              <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-2">Preset Personas</p>
+            <div className="mt-5">
+              <p className="ss-kicker mb-2.5">Preset personas</p>
               <div className="grid grid-cols-2 gap-2">
                 {ROLE_PRESETS.map((preset) => (
                   <button
@@ -276,27 +289,28 @@ export function Navbar() {
                     type="button"
                     disabled={loading}
                     onClick={() => handleDevLogin(preset.email, preset.name)}
-                    className="p-2 text-left rounded-lg bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 hover:border-emerald-500/50 transition group"
+                    className="group rounded-md border border-slate-700 bg-slate-850 p-2.5 text-left transition hover:border-brass-500/50"
                   >
-                    <div className="text-xs font-semibold text-slate-200 group-hover:text-emerald-300">
+                    <div className="text-xs font-semibold text-slate-200 group-hover:text-brass-300">
                       {preset.name}
                     </div>
-                    <div className="text-[10px] text-slate-400 truncate">{preset.email}</div>
+                    <div className="truncate font-mono text-[10px] text-slate-500">{preset.email}</div>
                   </button>
                 ))}
               </div>
             </div>
 
-            <div className="relative my-4">
+            <div className="relative my-5">
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full border-t border-slate-800" />
               </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-slate-900 px-2 text-slate-500">Or custom identity</span>
+              <div className="relative flex justify-center">
+                <span className="bg-slate-900 px-3 font-mono text-[10px] uppercase tracking-[0.2em] text-slate-500">
+                  Or custom identity
+                </span>
               </div>
             </div>
 
-            {/* Custom Input Form */}
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -304,10 +318,12 @@ export function Navbar() {
                   handleDevLogin(customEmail.trim(), customName.trim());
                 }
               }}
-              className="space-y-3"
+              className="space-y-3.5"
             >
               <div>
-                <label htmlFor="login-name-input" className="block text-xs font-medium text-slate-300 mb-1">Full Name</label>
+                <label htmlFor="login-name-input" className="mb-1.5 block text-xs font-medium text-slate-300">
+                  Full Name
+                </label>
                 <input
                   id="login-name-input"
                   type="text"
@@ -316,12 +332,14 @@ export function Navbar() {
                   value={customName}
                   onChange={(e) => setCustomName(e.target.value)}
                   placeholder="e.g. Maya Lin"
-                  className="w-full px-3 py-2 text-sm rounded-lg bg-slate-800 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition"
+                  className="ss-input"
                 />
               </div>
 
               <div>
-                <label htmlFor="login-email-input" className="block text-xs font-medium text-slate-300 mb-1">Email Address</label>
+                <label htmlFor="login-email-input" className="mb-1.5 block text-xs font-medium text-slate-300">
+                  Email Address
+                </label>
                 <input
                   id="login-email-input"
                   type="email"
@@ -330,15 +348,15 @@ export function Navbar() {
                   value={customEmail}
                   onChange={(e) => setCustomEmail(e.target.value)}
                   placeholder="e.g. maya@production.co"
-                  className="w-full px-3 py-2 text-sm rounded-lg bg-slate-800 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition"
+                  className="ss-input"
                 />
               </div>
 
-              <div className="pt-2 flex justify-end gap-2">
+              <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
-                  className="px-3 py-1.5 text-xs rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800 transition"
+                  className="ss-btn-ghost px-3 py-1.5 text-xs"
                 >
                   Cancel
                 </button>
@@ -346,7 +364,7 @@ export function Navbar() {
                   type="submit"
                   disabled={loading || !customEmail.trim() || !customName.trim()}
                   data-testid="login-submit-btn"
-                  className="px-4 py-1.5 text-xs rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium transition disabled:opacity-50"
+                  className="ss-btn-primary px-4 py-1.5 text-xs"
                 >
                   {loading ? 'Authenticating...' : 'Sign In / Register'}
                 </button>
